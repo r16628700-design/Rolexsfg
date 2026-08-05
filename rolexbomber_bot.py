@@ -132,9 +132,9 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboard
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
 # ========== VPS ENVIRONMENT VARIABLES ==========
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8749399634:AAF02JeWdCj3v1MtD0AFX2bh1RFVx1j0klQ")
-OWNER_ID = int(os.environ.get("OWNER_ID", 7812058540))
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 7812058540))
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8390444092:AAF11Znyxs1ayPuDG7DlCcsSQFVnmpGErus")
+OWNER_ID = int(os.environ.get("OWNER_ID", 8128821116))
+ADMIN_ID = int(os.environ.get("ADMIN_ID", 8128821116))
 WELCOME_IMAGE = os.environ.get("WELCOME_IMAGE", "https://kommodo.ai/i/wqVc4u68cErtebyE6okA")
 PORT = int(os.environ.get("PORT", 8080))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
