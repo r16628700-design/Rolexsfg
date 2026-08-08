@@ -2247,7 +2247,7 @@ def build_api_list():
 
 # ========== BUILD APIS ==========
 APIS = build_api_list()
-logger.info(f"✅ Total APIs Loaded: {len(APIS)}")  # Output: 118
+logger.info(f"✅ Total APIs Loaded: {len(APIS)}")
 
 # ========== DATABASE WRAPPER ==========
 class DatabaseWrapper:
